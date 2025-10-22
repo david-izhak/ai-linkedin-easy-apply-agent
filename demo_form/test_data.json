@@ -1,0 +1,60 @@
+"""
+Test data for the demo form.
+
+This file contains sample data that matches the structure expected by the modal flow engine.
+"""
+
+TEST_PROFILE = {
+    "years_experience": {
+        "python": 7,
+        "java": 9,
+        "spark": 5,
+        "kubernetes": 4,
+        "aws": 4,
+        "gcp": 3,
+        "azure": 3
+    },
+    "salary_expectation": {
+        "monthly_net_nis": 35000,
+        "monthly_net_usd": 6500
+    },
+    "work_authorization": {
+        "IL": "yes",
+        "EU": "need_visa",
+        "US": "no"
+    },
+    "notice_period_days": 10,
+    "preferred_location": "Tel Aviv, Israel",
+    "links": {
+        "github": "https://github.com/example",
+        "linkedin": "https://linkedin.com/in/example",
+        "portfolio": "https://example.com/portfolio"
+    },
+    "short_bio_en": "Senior backend engineer with Java/Python, Kafka, Spark, K8s.",
+    "short_bio_ru": "Сеньор бэкенд-инженер (Java/Python, Kafka, Spark, K8s)."
+}
+
+# Expected form field mappings for testing
+FIELD_MAPPINGS = {
+    "modal1": {
+        "phone": "phone",
+        "location": "preferred_location",
+        "work_authorization": "work_authorization.IL"  # Will map to Yes/No
+    },
+    "modal2": {
+        "python_exp": "years_experience.python",
+        "java_exp": "years_experience.java",
+        "salary": "salary_expectation.monthly_net_usd",
+        "relocate": None  # Will use one_of_options strategy
+    },
+    "modal3": {
+        "github": "links.github",
+        "linkedin": "links.linkedin",
+        "bio": "short_bio_en",
+        "skills": None,  # Checkboxes
+        "communication": None  # Select dropdown
+    }
+}
+
+
+

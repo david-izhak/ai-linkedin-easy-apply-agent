@@ -1,119 +1,98 @@
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+from unittest.mock import AsyncMock, patch
+from dataclasses import replace
 
-from phases.discovery import run_discovery_phase
+from phases.discovery import (
+    run_discovery_phase,
+    MIN_RECOMMENDED_PERIOD,
+    MAX_RECOMMENDED_PERIOD,
+)
+from config import config
+from pydantic import ValidationError
+from config import JobSearchConfig
 
 
 class TestRunDiscoveryPhase:
-    
     @pytest.mark.asyncio
-    @patch('phases.discovery.get_last_run_timestamp')
-    @patch('phases.discovery.fetch_job_links_user')
-    @patch('phases.discovery.save_discovered_jobs')
-    async def test_run_discovery_phase_first_run(self, mock_save_discovered_jobs, 
-                                                mock_fetch_job_links_user, 
-                                                mock_get_last_run_timestamp):
-        """Test discovery phase for the first run."""
-        mock_page = AsyncMock()
-        mock_get_last_run_timestamp.return_value = None
-        mock_fetch_job_links_user.return_value = [
-            (123, "/job1", "Software Engineer", "Company A"),
-            (456, "/job2", "Data Scientist", "Company B")
-        ]
-        
-        # Import constants from config
-        from config import (
-            DEFAULT_JOB_POSTED_FILTER_SECONDS,
-            KEYWORDS,
-            WORKPLACE,
-            GEO_ID,
-            DISTANCE,
-            SORT_BY,
+    @patch("phases.discovery.fetch_job_links_user", new_callable=AsyncMock)
+    async def test_run_discovery_phase_uses_config_period(self, mock_fetch, app_config):
+        """Test that discovery phase uses the period from the provided config."""
+        test_config = app_config.model_copy(
+            update={
+                "job_search": app_config.job_search.model_copy(
+                    update={"job_search_period_seconds": 12345}
+                )
+            }
         )
-        
-        f_tpr_expected = f"r{DEFAULT_JOB_POSTED_FILTER_SECONDS}"
-        
-        await run_discovery_phase(mock_page)
-        
-        mock_get_last_run_timestamp.assert_called_once()
-        mock_fetch_job_links_user.assert_called_once_with(
-            page=mock_page,
-            keywords=KEYWORDS,
-            workplace=WORKPLACE,
-            geo_id=GEO_ID,
-            distance=DISTANCE,
-            f_tpr=f_tpr_expected,
-            sort_by=SORT_BY,
-        )
-        mock_save_discovered_jobs.assert_called_once_with([
-            (123, "/job1", "Software Engineer", "Company A"),
-            (456, "/job2", "Data Scientist", "Company B")
-        ])
-    
+
+        await run_discovery_phase(test_config, AsyncMock())
+
+        mock_fetch.assert_awaited_once()
+        # Check that the config's value was passed to the fetch function
+        assert mock_fetch.call_args.kwargs["app_config"].job_search.job_search_period_seconds == 12345
+
+
+class TestDiscoveryPeriodValidation:
     @pytest.mark.asyncio
-    @patch('phases.discovery.get_last_run_timestamp')
-    @patch('phases.discovery.fetch_job_links_user')
-    @patch('phases.discovery.save_discovered_jobs')
-    async def test_run_discovery_phase_subsequent_run(self, mock_save_discovered_jobs, 
-                                                     mock_fetch_job_links_user, 
-                                                     mock_get_last_run_timestamp):
-        """Test discovery phase for a subsequent run."""
-        mock_page = AsyncMock()
-        
-        # Mock a previous run timestamp that was 2 hours ago
-        from datetime import datetime, timedelta
-        two_hours_ago = datetime.now() - timedelta(hours=2)
-        mock_get_last_run_timestamp.return_value = two_hours_ago
-        
-        mock_fetch_job_links_user.return_value = [
-            (789, "/job3", "Product Manager", "Company C")
-        ]
-        
-        # Import constants from config
-        from config import (
-            KEYWORDS,
-            WORKPLACE,
-            GEO_ID,
-            DISTANCE,
-            SORT_BY,
+    async def test_validation_error_on_zero_period(self, app_config):
+        """Test that zero period raises ValueError."""
+        test_config = app_config.model_copy(
+            update={
+                "job_search": app_config.job_search.model_copy(
+                    update={"job_search_period_seconds": 0}
+                )
+            }
         )
-        
-        # Calculate expected f_tpr (2 hours + 5 min buffer = 7500 seconds)
-        expected_seconds = int((datetime.now() - two_hours_ago).total_seconds()) + 300
-        f_tpr_expected = f"r{expected_seconds}"
-        
-        await run_discovery_phase(mock_page)
-        
-        mock_get_last_run_timestamp.assert_called_once()
-        mock_fetch_job_links_user.assert_called_once_with(
-            page=mock_page,
-            keywords=KEYWORDS,
-            workplace=WORKPLACE,
-            geo_id=GEO_ID,
-            distance=DISTANCE,
-            f_tpr=f_tpr_expected,
-            sort_by=SORT_BY,
-        )
-        mock_save_discovered_jobs.assert_called_once_with([
-            (789, "/job3", "Product Manager", "Company C")
-        ])
-    
+        with pytest.raises(ValueError, match="JOB_SEARCH_PERIOD_SECONDS must be a positive integer"):
+            await run_discovery_phase(test_config, AsyncMock())
+
     @pytest.mark.asyncio
-    @patch('phases.discovery.get_last_run_timestamp')
-    @patch('phases.discovery.fetch_job_links_user')
-    @patch('phases.discovery.save_discovered_jobs')
-    async def test_run_discovery_phase_calls_fetch_job_links_user_with_correct_params(self, mock_save_discovered_jobs, 
-                                                                                     mock_fetch_job_links_user, 
-                                                                                     mock_get_last_run_timestamp):
-        """Test that fetch_job_links_user is called with the correct parameters."""
-        mock_page = AsyncMock()
-        mock_get_last_run_timestamp.return_value = None
-        mock_fetch_job_links_user.return_value = []
-        
-        await run_discovery_phase(mock_page)
-        
-        # Verify the call was made
-        assert mock_fetch_job_links_user.called
+    async def test_validation_error_on_negative_period(self, app_config):
+        """Test that negative period raises ValueError."""
+        test_config = app_config.model_copy(
+            update={
+                "job_search": app_config.job_search.model_copy(
+                    update={"job_search_period_seconds": -1}
+                )
+            }
+        )
+        with pytest.raises(ValueError, match="JOB_SEARCH_PERIOD_SECONDS must be a positive integer"):
+            await run_discovery_phase(test_config, AsyncMock())
+
+    @pytest.mark.asyncio
+    async def test_validation_error_on_wrong_type(self, app_config):
+        """Test that non-integer period raises TypeError."""
+        with pytest.raises(ValidationError):
+            JobSearchConfig(job_search_period_seconds="invalid")
+
+
+class TestDiscoveryPeriodWarnings:
+    @pytest.mark.asyncio
+    @patch("phases.discovery.fetch_job_links_user", new_callable=AsyncMock)
+    async def test_large_period_warning(self, mock_fetch, caplog, app_config):
+        """Test that a very large period logs a warning."""
+        large_period = MAX_RECOMMENDED_PERIOD + 1
+        test_config = app_config.model_copy(
+            update={
+                "job_search": app_config.job_search.model_copy(
+                    update={"job_search_period_seconds": large_period}
+                )
+            }
+        )
+        await run_discovery_phase(test_config, AsyncMock())
+        assert "larger than recommended" in caplog.text
+
+    @pytest.mark.asyncio
+    @patch("phases.discovery.fetch_job_links_user", new_callable=AsyncMock)
+    async def test_small_period_warning(self, mock_fetch, caplog, app_config):
+        """Test that a very small period logs a warning."""
+        small_period = MIN_RECOMMENDED_PERIOD - 1
+        test_config = app_config.model_copy(
+            update={
+                "job_search": app_config.job_search.model_copy(
+                    update={"job_search_period_seconds": small_period}
+                )
+            }
+        )
+        await run_discovery_phase(test_config, AsyncMock())
+        assert "which is very short" in caplog.text

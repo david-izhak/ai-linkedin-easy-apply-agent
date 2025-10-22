@@ -1,0 +1,18 @@
+[
+  {
+    "id": 101,
+    "title": "Senior Backend Developer",
+    "company": "Singit",
+    "description": "We’re hiring a Senior Backend Developer to design, build, and maintain scalable backend systems. You’ll focus on clean APIs, database design, infrastructure, and backend performance. Our main stack includes Node.js, MongoDB, AWS, and some Python. Familiarity with React/React Native is a plus. Strong use of modern AI coding tools (like Copilot, Claude) is important.\nKey Requirements:\n\n6+ years backend development experience\nDeep knowledge of Node.js and MongoDB\nHands-on AWS experience (ECS, EC2, S3)\nSecurity, scalability, and clean architecture focus\nStrong independent problem-solving skills\n\nBonus: Python skills, React/React Native familiarity, CI/CD, A/B testing experience.\nWhy Join:\n\nBuild backend systems that power real-world learning\nWork in a small, fast-moving team\nShape tech stack and backend architecture\nFlexible, meaningful work environment",
+    "location": "Tel Aviv District, Israel",
+    "company_description": "Singit is revolutionizing English learning through the power of music and AI. Our platform transforms chart-topping songs into personalized, interactive English lessons that feel more like fun than study. With over 5 million songs and smart pedagogical design, we help learners of all ages build vocabular ... see more",
+    "seniority_level": "Senior",
+    "employment_type": "Full-time",
+    "job_function": "Engineering",
+    "industries": "E-learning",
+    "company_overview": "Singit is revolutionizing English learning through the power of music and AI.\n\nOur platform transforms chart-topping songs into personalized, interactive English lessons that feel more like fun than study.\n\nWith over 5 million songs and smart pedagogical design, we help learners of all ages build vocabulary, improve pronunciation, and master real-world English — whether at school or on their own.\n\nAlready used by over 500,000 students in schools worldwide, Singit blends cultural relevance with proven language strategies to make learning stick.\n\nWant to bring Singit to your school, platform, or country? Let’s talk.",
+    "company_website": "https://welcome.singit.io/",
+    "company_industry": "E-learning",
+    "company_size": "11-50"
+  }
+]

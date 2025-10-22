@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Easy Apply Test Stand</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f3f2ef;
+        }
+
+        .test-header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+        }
+
+        .test-header h1 {
+            margin: 0 0 10px 0;
+            color: #0a66c2;
+        }
+
+        .test-controls {
+            margin-top: 20px;
+        }
+
+        button {
+            background-color: #0a66c2;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background-color: #004182;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: #000000;
+            font-size: 20px;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #000000;
+            font-size: 14px;
+        }
+
+        .form-group .required {
+            color: #d11124;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group input[type="email"],
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #0a66c2;
+            box-shadow: 0 0 0 2px rgba(10, 102, 194, 0.1);
+        }
+
+        .radio-group,
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .radio-group label,
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            font-weight: normal;
+            cursor: pointer;
+        }
+
+        .radio-group input[type="radio"],
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .fieldset {
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .fieldset legend {
+            font-weight: 600;
+            padding: 0 8px;
+            color: #000000;
+        }
+
+        .lazy-field {
+            display: none;
+            margin-top: 12px;
+        }
+
+        .lazy-field.visible {
+            display: block;
+        }
+
+        .error-message {
+            color: #d11124;
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .spinner {
+            display: none;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #0a66c2;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        .spinner.active {
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .step-indicator {
+            text-align: center;
+            padding: 12px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .success-message {
+            text-align: center;
+            padding: 40px;
+            color: #057642;
+        }
+
+        .success-message h2 {
+            color: #057642;
+        }
+
+        #review-summary,
+        #review-summary * {
+            color: #000000 !important;
+        }
+
+        #review-content p {
+            color: #000000;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="test-header">
+        <h1>🧪 LinkedIn Easy Apply Test Stand</h1>
+        <p>This test stand simulates a multi-step LinkedIn Easy Apply form with various field types.</p>
+        <div class="test-controls">
+            <button id="startTest">Start Test Flow</button>
+            <button id="resetTest">Reset</button>
+        </div>
+    </div>
+
+    <!-- Modal 1: Contact Information -->
+    <div class="modal-overlay" id="modal1" role="dialog" aria-labelledby="modal1-title">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal1-title">Contact Information</h2>
+            </div>
+            <div class="modal-body">
+                <div class="step-indicator">Step 1 of 4</div>
+
+                <fieldset>
+                    <legend>Phone Number</legend>
+                    <div class="form-group">
+                        <label for="phone">Phone Number <span class="required">*</span></label>
+                        <input type="text" id="phone" name="phone" placeholder="+1 (555) 123-4567"
+                            pattern="^\+?[\d\s\-\(\)]+$" maxlength="20" required>
+                        <div class="error-message" id="phone-error">Please enter a valid phone number</div>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Location</legend>
+                    <div class="form-group">
+                        <label for="location">Preferred Location <span class="required">*</span></label>
+                        <input type="text" id="location" name="location" placeholder="City, Country" required>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Work Authorization</legend>
+                    <div class="form-group">
+                        <label>Are you legally authorized to work in this country? <span
+                                class="required">*</span></label>
+                        <div class="radio-group" role="radiogroup" aria-labelledby="work-auth-label">
+                            <label>
+                                <input type="radio" name="work_authorization" value="Yes" aria-label="Yes" required>
+                                <span>Yes</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="work_authorization" value="No" aria-label="No" required>
+                                <span>No</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="work_authorization" value="Need Visa" aria-label="Need Visa"
+                                    required>
+                                <span>Need Visa</span>
+                            </label>
+                        </div>
+                        <div class="error-message">Please select an option</div>
+                    </div>
+                </fieldset>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="next1" aria-label="Next">Next</button>
+                <span class="spinner" id="spinner1" aria-busy="false"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Experience -->
+    <div class="modal-overlay" id="modal2" role="dialog" aria-labelledby="modal2-title">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal2-title">Experience & Skills</h2>
+            </div>
+            <div class="modal-body">
+                <div class="step-indicator">Step 2 of 4</div>
+
+                <fieldset>
+                    <legend>Years of Experience</legend>
+                    <div class="form-group">
+                        <label for="python_exp">Years of experience with Python <span class="required">*</span></label>
+                        <input type="number" id="python_exp" name="python_exp" min="0" max="50" required>
+                        <div class="error-message" id="python_exp-error">Please enter a valid number of years (0-50)
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="java_exp">Years of experience with Java</label>
+                        <input type="number" id="java_exp" name="java_exp" min="0" max="50">
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Salary Expectations</legend>
+                    <div class="form-group">
+                        <label for="salary">Expected Monthly Salary (USD) <span class="required">*</span></label>
+                        <input type="number" id="salary" name="salary" min="1000" max="10000000" required>
+                        <div class="error-message" id="salary-error">Please enter a valid salary between $1,000 and
+                            $10,000,000</div>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Relocation</legend>
+                    <div class="form-group">
+                        <label>Are you willing to relocate? <span class="required">*</span></label>
+                        <div class="radio-group" role="radiogroup">
+                            <label>
+                                <input type="radio" name="relocate" value="Yes" aria-label="Yes" required>
+                                <span>Yes</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="relocate" value="No" aria-label="No" required>
+                                <span>No</span>
+                            </label>
+                        </div>
+                        <div class="lazy-field" id="relocate-field">
+                            <label for="relocate-location">Preferred relocation location:</label>
+                            <input type="text" id="relocate-location" name="relocate-location">
+                        </div>
+                        <div class="error-message">Please select an option</div>
+                    </div>
+                </fieldset>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="back2">Back</button>
+                <button type="button" id="next2" aria-label="Continue">Continue</button>
+                <span class="spinner" id="spinner2" aria-busy="false"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Additional Information -->
+    <div class="modal-overlay" id="modal3" role="dialog" aria-labelledby="modal3-title">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal3-title">Additional Information</h2>
+            </div>
+            <div class="modal-body">
+                <div class="step-indicator">Step 3 of 4</div>
+
+                <fieldset>
+                    <legend>Links & Portfolio</legend>
+                    <div class="form-group">
+                        <label for="github">GitHub Profile</label>
+                        <input type="text" id="github" name="github" placeholder="https://github.com/username"
+                            pattern="https?://.*">
+                    </div>
+                    <div class="form-group">
+                        <label for="linkedin">LinkedIn Profile</label>
+                        <input type="text" id="linkedin" name="linkedin" placeholder="https://linkedin.com/in/username">
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Additional Questions</legend>
+                    <div class="form-group">
+                        <label for="bio">Tell us about yourself (max 500 characters)</label>
+                        <textarea id="bio" name="bio" rows="4" maxlength="500"
+                            placeholder="Brief description of your background and experience"></textarea>
+                        <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                            <span id="bio-count">0</span>/500 characters
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Skills (Select all that apply)</label>
+                        <div class="checkbox-group" role="group">
+                            <label>
+                                <input type="checkbox" name="skills" value="Python" aria-label="Python">
+                                <span>Python</span>
+                            </label>
+                            <label>
+                                <input type="checkbox" name="skills" value="Java" aria-label="Java">
+                                <span>Java</span>
+                            </label>
+                            <label>
+                                <input type="checkbox" name="skills" value="Kubernetes" aria-label="Kubernetes">
+                                <span>Kubernetes</span>
+                            </label>
+                            <label>
+                                <input type="checkbox" name="skills" value="AWS" aria-label="AWS">
+                                <span>AWS</span>
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Preferred Communication</legend>
+                    <div class="form-group">
+                        <label for="communication">How would you like to be contacted?</label>
+                        <select id="communication" name="communication" aria-label="Preferred communication method">
+                            <option value="">Select an option</option>
+                            <option value="Email">Email</option>
+                            <option value="Phone">Phone</option>
+                            <option value="LinkedIn">LinkedIn Message</option>
+                        </select>
+                    </div>
+                </fieldset>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="back3">Back</button>
+                <button type="button" id="next3" aria-label="Review">Review</button>
+                <span class="spinner" id="spinner3" aria-busy="false"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 4: Review & Submit -->
+    <div class="modal-overlay" id="modal4" role="dialog" aria-labelledby="modal4-title">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal4-title">Review Your Application</h2>
+            </div>
+            <div class="modal-body">
+                <div class="step-indicator">Step 4 of 4</div>
+
+                <div id="review-content">
+                    <p>Please review your information before submitting:</p>
+                    <div id="review-summary"
+                        style="background: #f9f9f9; padding: 16px; border-radius: 4px; margin-top: 16px; color: #000000;">
+                        <!-- Summary will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="back4">Back</button>
+                <button type="button" id="submit" aria-label="Submit Application">Submit Application</button>
+                <span class="spinner" id="spinner4" aria-busy="false"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div class="modal-overlay" id="successModal" role="dialog" aria-labelledby="success-title">
+        <div class="modal">
+            <div class="modal-body">
+                <div class="success-message">
+                    <h2 id="success-title">✅ Application Submitted Successfully!</h2>
+                    <p>Your application has been processed.</p>
+                    <button type="button" id="closeSuccess">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 0;
+        const modals = ['modal1', 'modal2', 'modal3', 'modal4'];
+        let formData = {};
+
+        function validateModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal) {
+                console.error('Modal not found:', modalId);
+                return false;
+            }
+
+            let isValid = true;
+
+            // Hide all error messages first
+            modal.querySelectorAll('.error-message').forEach(err => err.style.display = 'none');
+
+            // Check radio button groups separately
+            const radioGroups = new Set();
+            modal.querySelectorAll('input[type="radio"][required]').forEach(radio => {
+                radioGroups.add(radio.name);
+            });
+
+            radioGroups.forEach(groupName => {
+                const radios = modal.querySelectorAll(`input[type="radio"][name="${groupName}"]`);
+                const isChecked = Array.from(radios).some(radio => radio.checked);
+                console.log(`Radio group ${groupName}: isChecked=${isChecked}`);
+                if (!isChecked) {
+                    isValid = false;
+                    const firstRadio = radios[0];
+                    const formGroup = firstRadio.closest('.form-group');
+                    if (formGroup) {
+                        const errorDiv = formGroup.querySelector('.error-message');
+                        if (errorDiv) {
+                            errorDiv.style.display = 'block';
+                        }
+                    }
+                }
+            });
+
+            // Check other required elements (excluding radio buttons, as they're handled above)
+            const requiredElements = modal.querySelectorAll('[required]:not(input[type="radio"])');
+            console.log('Required elements found:', requiredElements.length);
+            requiredElements.forEach(el => {
+                const fieldValid = el.checkValidity();
+                const fieldValue = el.value;
+                const fieldId = el.id || el.name || 'unnamed';
+                console.log(`Field ${fieldId} (type: ${el.type}): valid=${fieldValid}, value="${fieldValue}"`);
+
+                if (!fieldValid) {
+                    isValid = false;
+                    const formGroup = el.closest('.form-group');
+                    if (formGroup) {
+                        // Try to find specific error message element first
+                        let errorDiv = document.getElementById(`${fieldId}-error`);
+                        if (!errorDiv) {
+                            // Fallback to general error message in form-group
+                            errorDiv = formGroup.querySelector('.error-message');
+                        }
+                        if (errorDiv) {
+                            // Update error message text based on validation issue
+                            if (el.type === 'number') {
+                                if (el.value === '' || el.value === null || el.value === undefined) {
+                                    errorDiv.textContent = 'This field is required';
+                                } else {
+                                    const numValue = parseFloat(el.value);
+                                    if (isNaN(numValue)) {
+                                        errorDiv.textContent = 'Please enter a valid number';
+                                    } else if (el.hasAttribute('min') && numValue < parseFloat(el.getAttribute('min'))) {
+                                        const min = el.getAttribute('min');
+                                        errorDiv.textContent = `Value must be at least ${min}`;
+                                    } else if (el.hasAttribute('max') && numValue > parseFloat(el.getAttribute('max'))) {
+                                        const max = el.getAttribute('max');
+                                        errorDiv.textContent = `Value must be at most ${max}`;
+                                    } else {
+                                        // Check if there's a step issue or other validation problem
+                                        const validity = el.validity;
+                                        if (validity.stepMismatch) {
+                                            errorDiv.textContent = 'Please enter a valid number';
+                                        } else if (validity.badInput) {
+                                            errorDiv.textContent = 'Please enter a valid number';
+                                        } else {
+                                            // Use default error message from the element or fallback
+                                            errorDiv.textContent = el.validationMessage || 'Please enter a valid number';
+                                        }
+                                    }
+                                }
+                            } else {
+                                // For non-number fields, use standard validation message
+                                errorDiv.textContent = el.validationMessage || 'This field is required';
+                            }
+                            errorDiv.style.display = 'block';
+                        }
+                    }
+                }
+            });
+
+            return isValid;
+        }
+
+        function showModal(modalId) {
+            console.log('showModal called with:', modalId);
+            // Hide all modals
+            document.querySelectorAll('.modal-overlay').forEach(modal => {
+                modal.classList.remove('active');
+            });
+
+            // Show target modal
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('active');
+                console.log('Modal shown:', modalId);
+            } else {
+                console.error('Modal not found:', modalId);
+            }
+        }
+
+        function hideSpinner(step) {
+            const spinner = document.getElementById(`spinner${step}`);
+            if (spinner) {
+                spinner.classList.remove('active');
+                spinner.setAttribute('aria-busy', 'false');
+            }
+        }
+
+        function showSpinner(step) {
+            const spinner = document.getElementById(`spinner${step}`);
+            if (spinner) {
+                spinner.classList.add('active');
+                spinner.setAttribute('aria-busy', 'true');
+            }
+        }
+
+        function collectFormData(modalId) {
+            const modal = document.getElementById(modalId);
+            const data = {};
+
+            // Collect text inputs
+            modal.querySelectorAll('input[type="text"], input[type="number"], input[type="email"], textarea').forEach(input => {
+                if (input.value) {
+                    data[input.name || input.id] = input.value;
+                }
+            });
+
+            // Collect radio selections
+            modal.querySelectorAll('input[type="radio"]:checked').forEach(radio => {
+                data[radio.name] = radio.value;
+            });
+
+            // Collect checkbox selections
+            const checkboxes = {};
+            modal.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                if (!checkboxes[cb.name]) {
+                    checkboxes[cb.name] = [];
+                }
+                checkboxes[cb.name].push(cb.value);
+            });
+            Object.assign(data, checkboxes);
+
+            // Collect select values
+            modal.querySelectorAll('select').forEach(select => {
+                if (select.value) {
+                    data[select.name || select.id] = select.value;
+                }
+            });
+
+            return data;
+        }
+
+        function updateReviewSummary() {
+            const summary = document.getElementById('review-summary');
+            let html = '<ul style="list-style: none; padding: 0; color: #000000;">';
+            for (const [key, value] of Object.entries(formData)) {
+                if (Array.isArray(value)) {
+                    html += `<li style="color: #000000;"><strong style="color: #000000;">${key}:</strong> <span style="color: #000000;">${value.join(', ')}</span></li>`;
+                } else {
+                    html += `<li style="color: #000000;"><strong style="color: #000000;">${key}:</strong> <span style="color: #000000;">${value}</span></li>`;
+                }
+            }
+            html += '</ul>';
+            summary.innerHTML = html;
+        }
+
+        // Handle lazy field visibility
+        document.querySelectorAll('input[type="radio"][name="relocate"]').forEach(radio => {
+            radio.addEventListener('change', function () {
+                const relocateField = document.getElementById('relocate-field');
+                if (this.value === 'Yes' && this.checked) {
+                    relocateField.classList.add('visible');
+                } else {
+                    relocateField.classList.remove('visible');
+                }
+            });
+        });
+
+        // Bio character counter
+        const bio = document.getElementById('bio');
+        if (bio) {
+            bio.addEventListener('input', function () {
+                document.getElementById('bio-count').textContent = this.value.length;
+            });
+        }
+
+        // Hide error messages when user starts typing in number fields
+        document.querySelectorAll('input[type="number"][required]').forEach(input => {
+            input.addEventListener('input', function () {
+                const errorDiv = document.getElementById(`${this.id}-error`);
+                if (errorDiv && this.checkValidity()) {
+                    errorDiv.style.display = 'none';
+                }
+            });
+        });
+
+        // Navigation handlers
+        document.getElementById('startTest').addEventListener('click', () => {
+            currentStep = 0;
+            formData = {};
+            showModal('modal1');
+        });
+
+        document.getElementById('resetTest').addEventListener('click', () => {
+            currentStep = 0;
+            formData = {};
+            document.querySelectorAll('.modal-overlay').forEach(modal => {
+                modal.classList.remove('active');
+            });
+            document.querySelectorAll('input, textarea, select').forEach(el => {
+                if (el.type === 'checkbox' || el.type === 'radio') {
+                    el.checked = false;
+                } else {
+                    el.value = '';
+                }
+            });
+        });
+
+        document.getElementById('next1').addEventListener('click', () => {
+            if (!validateModal('modal1')) {
+                return;
+            }
+            showSpinner(1);
+            setTimeout(() => {
+                formData = { ...formData, ...collectFormData('modal1') };
+                hideSpinner(1);
+                showModal('modal2');
+            }, 500);
+        });
+
+        document.getElementById('back2').addEventListener('click', () => {
+            showModal('modal1');
+        });
+
+        const next2Button = document.getElementById('next2');
+        if (next2Button) {
+            next2Button.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Next2 button clicked');
+                const isValid = validateModal('modal2');
+                console.log('Validation result:', isValid);
+                if (!isValid) {
+                    console.log('Validation failed, cannot proceed');
+                    return;
+                }
+                console.log('Validation passed, proceeding to next modal');
+                showSpinner(2);
+                setTimeout(() => {
+                    formData = { ...formData, ...collectFormData('modal2') };
+                    hideSpinner(2);
+                    console.log('Showing modal3');
+                    showModal('modal3');
+                }, 500);
+            });
+        } else {
+            console.error('next2 button not found!');
+        }
+
+        document.getElementById('back3').addEventListener('click', () => {
+            showModal('modal2');
+        });
+
+        document.getElementById('next3').addEventListener('click', () => {
+            showSpinner(3);
+            setTimeout(() => {
+                formData = { ...formData, ...collectFormData('modal3') };
+                hideSpinner(3);
+                updateReviewSummary();
+                showModal('modal4');
+            }, 500);
+        });
+
+        document.getElementById('back4').addEventListener('click', () => {
+            showModal('modal3');
+        });
+
+        document.getElementById('submit').addEventListener('click', () => {
+            showSpinner(4);
+            setTimeout(() => {
+                hideSpinner(4);
+                showModal('successModal');
+                console.log('Form submitted with data:', formData);
+            }, 1000);
+        });
+
+        document.getElementById('closeSuccess').addEventListener('click', () => {
+            document.getElementById('successModal').classList.remove('active');
+        });
+
+    </script>
+</body>
+
+</html>

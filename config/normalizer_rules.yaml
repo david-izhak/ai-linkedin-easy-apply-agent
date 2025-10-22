@@ -1,0 +1,185 @@
+# Example configuration file for QuestionNormalizer.
+#
+# Can be loaded via QuestionNormalizer(config_path="config/normalizer_rules.yaml")
+
+defaults:
+  radio_preference: ["Yes", "Да"]
+
+synonyms:
+  # Canonical Yes/No
+  Yes:
+    - "yes"
+    - "y"
+    - "true"  # <-- Взять в кавычки
+    - "да"
+  No:
+    - "no"
+    - "n"
+    - "false" # <-- Взять в кавычки
+    - "нет"
+
+  # Canonical contact preferences
+  YES:
+    - "да"
+    - "y"
+    - "authorized"
+    - "i am authorized"
+    - "i confirm"
+    - "yes"
+  NO:
+    - "нет"
+    - "n"
+    - "not authorized"
+    - "no"
+
+type_keywords:
+  QUANTITY_YEARS:
+    - "year"
+    - "years"
+    - "experience"
+    - "опыт"
+  SALARY:
+    - "salary"
+    - "compensation"
+    - "зарплата"
+  LOCATION:
+    - "location"
+    - "city"
+    - "country"
+    - "локация"
+    - "город"
+  BOOLEAN:
+    - "are you"
+    - "do you"
+    - "have you"
+    - "can you"
+    - "вы"
+    - "у вас"
+
+# New section for currency synonyms
+currency_synonyms:
+  usd:
+    - "usd"
+    - "dollar"
+    - "dollars"
+    - "$"
+    - "доллар"
+  eur:
+    - "eur"
+    - "euro"
+    - "евро"
+    - "€"
+  nis:
+    - "nis"
+    - "ils"
+    - "shekel"
+    - "shekels"
+    - "₪"
+    - "шекель"
+
+# New section for skill synonyms
+skill_synonyms:
+  # canonical_name: [list of synonyms]
+
+  # Cloud & DevOps
+  gcp:
+    - "google cloud platform"
+    - "google cloud"
+  aws:
+    - "amazon web services"
+  azure:
+    - "microsoft azure"
+  kubernetes:
+    - "k8s"
+  docker:
+    - "docker containerization"
+  ci_cd:
+    - "ci/cd"
+    - "cicd"
+    - "continuous integration"
+    - "continuous delivery"
+    - "continuous deployment"
+  jenkins:
+    - "jenkins ci"
+  artifactory:
+    - "jfrog artifactory"
+  nexus:
+    - "sonatype nexus"
+  rancher:
+    - "rancher labs"
+  telepresence:
+    - "telepresence.io"
+  
+  # Backend & Languages
+  java:
+    - "java programming"
+  python:
+    - "python programming"
+  bash:
+    - "bash scripting"
+    - "shell scripting"
+  spring_framework:
+    - "spring"
+    - "spring boot"
+  hibernate:
+    - "hibernate orm"
+  multithreading:
+    - "multi-threading"
+    - "concurrent programming"
+  rest_api:
+    - "rest"
+    - "restful api"
+    - "restful services"
+  grpc:
+    - "google remote procedure call"
+  
+  # Databases & Data
+  sql:
+    - "structured query language"
+  no_sql:
+    - "nosql"
+    - "non-relational databases"
+  postgresql:
+    - "postgres"
+  mysql:
+    - "my sql"
+  mongodb:
+    - "mongo db"
+  redis:
+    - "redis cache"
+  elasticsearch:
+    - "elastic search"
+    - "elk stack"
+  kafka:
+    - "apache kafka"
+  spark:
+    - "apache spark"
+  
+  # AI & Machine Learning
+  ai:
+    - "artificial intelligence"
+  llm:
+    - "large language model"
+    - "large language models"
+    - "llms"
+    - "large language models"
+  langchain:
+    - "langchain framework"
+  rag_pipelines:
+    - "rag"
+    - "retrieval-augmented generation"
+
+  # Testing
+  junit:
+    - "j-unit"
+  mockito:
+    - "mocking"
+
+  # Other
+  html:
+    - "html5"
+  regex:
+    - "regular expressions"
+  solid_principles:
+    - "solid"
+

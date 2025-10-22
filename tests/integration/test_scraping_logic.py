@@ -1,59 +1,73 @@
 import pytest
-from playwright.sync_api import Page
+from playwright.async_api import Page, Route
 import os
+from actions.fetch_jobs import _extract_job_data_from_page, fetch_job_details
 
-# Removed sys.path.insert as pytest should handle module discovery
 
-from actions.fetch_jobs_sync import _scrape_page_for_links_sync, _scrape_job_page_details_sync, _scrape_company_about_page_sync
-
-# Helper function to load fixture content
 def load_fixture(filename):
-    fixture_path = os.path.join(os.path.dirname(__file__), '../fixtures', filename)
-    with open(fixture_path, 'r', encoding='utf-8') as f:
+    fixture_path = os.path.join(os.path.dirname(__file__), "../fixtures", filename)
+    with open(fixture_path, "r", encoding="utf-8") as f:
         return f.read()
+
 
 class TestScrapingLogic:
 
-    def test_scrape_search_page_for_links(self, page: Page):
+    @pytest.mark.asyncio
+    async def test_scrape_search_page_for_links(self, page: Page):
         """Tests extracting job links from a saved search results page."""
-        html_content = load_fixture('sample_search_page.html')
-        page.set_content(html_content)
-
-        scraped_data = _scrape_page_for_links_sync(page)
-
+        html_content = load_fixture("sample_search_page.html")
+        await page.set_content(html_content)
+        scraped_data = await _extract_job_data_from_page(page)
         assert len(scraped_data) == 2
-        # First job
-        assert scraped_data[0][0] == 1234567890  # job_id
-        assert scraped_data[0][1] == '/jobs/view/1234567890/' # link
-        assert scraped_data[0][2] == 'Software Engineer' # title
-        assert scraped_data[0][3] == 'Tech Innovations Inc.' # company
-        # Second job
-        assert scraped_data[1][0] == 987654321 # job_id
-        assert scraped_data[1][2] == 'Backend Developer' # title
+        assert scraped_data[0][0] == 1234567890
+        assert scraped_data[0][1] == "/jobs/view/1234567890"
+        assert scraped_data[0][2] == "Software Engineer"
+        assert scraped_data[0][3] == "Tech Innovations Inc."
+        assert scraped_data[1][0] == 987654321
+        assert scraped_data[1][1] == "/jobs/view/0987654321"
+        assert scraped_data[1][2] == "Backend Developer"
+        assert scraped_data[1][3] == "Data Systems LLC"
 
-    def test_scrape_job_page_details(self, page: Page):
-        """Tests extracting details from a saved job details page."""
-        html_content = load_fixture('sample_job_page.html')
-        page.set_content(html_content)
+    @pytest.mark.asyncio
+    async def test_fetch_job_details(self, page: Page):
+        """
+        Tests extracting details from a job page and its associated company page.
+        This test mocks the navigation to both pages.
+        """
+        job_page_html = load_fixture("sample_job_page.html")
+        company_page_html = load_fixture("sample_company_page.html")
 
-        details = _scrape_job_page_details_sync(page, "/fake-link")
+        job_url = "https://www.linkedin.com/jobs/view/12345"
+        company_url = "https://www.linkedin.com/company/tech-innovations-inc/about/"
 
-        assert "We are looking for a passionate Software Engineer" in details['description']
-        assert "Tech Innovations Inc. is a leader" in details['company_description']
-        assert details['seniority_level'] == 'Mid-Senior level'
-        assert details['employment_type'] == 'Full-time'
-        assert details['industries'] == 'IT Services and IT Consulting'
+        async def handle_route(route: Route):
+            request_url = route.request.url
+            if request_url == job_url:
+                await route.fulfill(body=job_page_html, content_type="text/html")
+            elif request_url.startswith(company_url):
+                await route.fulfill(body=company_page_html, content_type="text/html")
+            else:
+                await route.continue_()
 
-    def test_scrape_company_about_page(self, page: Page):
-        """Tests extracting details from a saved company about page."""
-        html_content = load_fixture('sample_company_page.html')
-        # The function uses goto, but for this test, set_content is sufficient
-        # as we are not testing navigation, just scraping.
-        page.set_content(html_content)
+        await page.route("**/*", handle_route)
 
-        details = _scrape_company_about_page_sync(page, "fake-company-name")
+        details = await fetch_job_details(page, job_url)
 
-        assert "forward-thinking technology company" in details['company_overview']
-        assert details['company_website'] == 'https://tech-innovations.example.com'
-        assert details['company_industry'] == 'Software Development'
-        assert details['company_size'] == '501-1,000 employees'
+        # Assertions for job page details
+        assert "We are looking for a passionate Software Engineer" in details.get(
+            "description", ""
+        )
+        assert "Tech Innovations Inc. is a leader" in details.get(
+            "company_description", ""
+        )
+        assert details.get("seniority_level") == "Mid-Senior level"
+        assert details.get("employment_type") == "Full-time"
+        assert details.get("industries") == "IT Services and IT Consulting"
+
+        # Assertions for company about page details
+        assert "forward-thinking technology company" in details.get(
+            "company_overview", ""
+        )
+        assert details.get("company_website") == "https://tech-innovations.example.com"
+        assert details.get("company_industry") == "Software Development"
+        assert details.get("company_size") == "501-1,000 employees"

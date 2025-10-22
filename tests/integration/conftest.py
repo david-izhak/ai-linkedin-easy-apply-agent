@@ -1,20 +1,20 @@
-import pytest
-from playwright.sync_api import Page, sync_playwright
+import pytest_asyncio
+from playwright.async_api import async_playwright
 
 
-@pytest.fixture(scope="session")
-def browser():
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def browser():
     """Create a browser instance for integration tests."""
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True) # Use headless mode for tests
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)  # Use headless mode for tests
         yield browser
-        browser.close()
+        await browser.close()
 
 
-@pytest.fixture
-def page(browser):
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def page(browser):
     """Create a new page for each test."""
-    context = browser.new_context()
-    page = context.new_page()
+    context = await browser.new_context()
+    page = await context.new_page()
     yield page
-    context.close()
+    await context.close()

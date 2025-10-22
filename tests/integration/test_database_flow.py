@@ -1,49 +1,54 @@
-import pytest
-import sqlite3
-import datetime
-
 # Adjust the python path to import the module
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-
+import pytest
+import sqlite3
 from core import database
 
-# The db_connection fixture from conftest.py is used automatically
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
+
+@pytest.fixture
+def db_conn():
+    """Fixture to set up an in-memory SQLite database for testing."""
+    conn = sqlite3.connect(":memory:")
+    database.init_db(conn)
+    yield conn
+    conn.close()
+
+
 class TestDatabaseFlow:
-
-    def test_happy_path_job_lifecycle(self, db_connection):
+    def test_happy_path_job_lifecycle(self, db_conn):
         """Tests the complete lifecycle of a job entry in the database."""
-        # 1. Save discovered jobs
-        discovered_jobs = [
-            (123, "/link1", "Software Engineer", "Tech Corp"),
-            (456, "/link2", "Data Analyst", "Data Inc."),
-        ]
-        database.save_discovered_jobs(discovered_jobs)
+        # 1. Discover: Save a new job
+        discovered_jobs = [(123, "/job-link", "Software Engineer", "TestCorp")]
+        database.save_discovered_jobs(discovered_jobs, db_conn)
 
-        # 2. Get discovered jobs and verify
-        retrieved_discovered = database.get_discovered_jobs()
-        assert len(retrieved_discovered) == 2
-        assert retrieved_discovered[0][0] == 456 # job_id
-        assert retrieved_discovered[1][0] == 123
+        # Verify it's in the 'discovered' state
+        retrieved_jobs = database.get_jobs_to_enrich(db_conn)
+        assert len(retrieved_jobs) == 1
+        assert retrieved_jobs[0][0] == 123
 
-        # 3. Save enrichment data for one job
-        enrichment_details = {"description": "A great job.", "seniority_level": "Senior"}
-        database.save_enrichment_data(123, enrichment_details)
+        # 2. Enrich: Update the job with more details
+        enrichment_data = {"description": "Job description here.", "company_description": "A great place to work."}
+        database.save_enrichment_data(123, enrichment_data, db_conn)
 
-        # 4. Get enriched jobs and verify
-        retrieved_enriched = database.get_enriched_jobs()
+        # Verify it's now in the 'enriched' state and discovered jobs are gone
+        retrieved_enriched = database.get_enriched_jobs(db_conn)
         assert len(retrieved_enriched) == 1
-        assert retrieved_enriched[0][0] == 123 # job_id
-        assert retrieved_enriched[0][4] == "A great job." # description
+        assert retrieved_enriched[0][0] == 123
 
-        # 5. Update job status to 'applied'
-        database.update_job_status(123, "applied")
+        # After enrichment, there should be no more jobs to enrich.
+        assert not database.get_jobs_to_enrich(db_conn)
 
-        # 6. Verify the job is no longer in the 'enriched' list
-        assert len(database.get_enriched_jobs()) == 0
+        # 3. Process: Update the job status to 'applied'
+        database.update_job_status(123, "applied", db_conn)
 
-        # 7. Count today's applications
-        # The created_at for job 123 was set when save_discovered_jobs was called.
-        # Assuming the test runs on the same day, count_todays_applications should find it.
-        assert database.count_todays_applications() == 1
+        # Verify it's no longer in 'enriched'
+        assert not database.get_enriched_jobs(db_conn)
+
+        # Optional: Verify final state with a direct query
+        cursor = db_conn.cursor()
+        cursor.execute("SELECT status FROM vacancies WHERE id = 123")
+        status = cursor.fetchone()[0]
+        assert status == "applied"

@@ -98,7 +98,9 @@ async def _process_single_select(
         label_text = await label_element.inner_text()
         for label_regex, value in booleans.items():
             if re.search(label_regex, label_text, re.IGNORECASE):
-                option_to_select = options[1] if value else options[0] # Corrected logic
+                option_to_select = (
+                    options[1] if value else options[0]
+                )  # Corrected logic
                 option_value = await option_to_select.get_attribute("value")
                 await select_element.select_option(value=option_value)
                 logger.debug(f"Selected option for '{label_text}'.")

@@ -1,19 +1,27 @@
 import sqlite3
 import datetime
 import logging
+import contextlib
 
-DB_FILE = "jobs.db"
+
 logger = logging.getLogger(__name__)
 
 
-def setup_database():
+@contextlib.contextmanager
+def get_db_connection(db_file: str):
+    """Контекстный менеджер для соединения с базой данных."""
+    conn = sqlite3.connect(db_file)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def init_db(conn: sqlite3.Connection):
     """
-    Creates the database and tables using job_id as the primary key.
+    Creates the database tables on the given connection.
     """
-    logger.debug("Setting up database with job_id as PRIMARY KEY...")
-    conn = sqlite3.connect(
-        DB_FILE, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
-    )
+    logger.debug(f"Setting up database tables...")
     cursor = conn.cursor()
 
     # Vacancies table with job_id as the PRIMARY KEY
@@ -35,32 +43,25 @@ def setup_database():
             company_overview TEXT,
             company_website TEXT,
             company_industry TEXT,
-            company_size TEXT
+            company_size TEXT,
+            match_percentage INTEGER,
+            analysis TEXT
         )
     """
     )
-
-    # Add new columns if they don't exist (for backward compatibility)
-    table_info = cursor.execute("PRAGMA table_info(vacancies)").fetchall()
-    column_names = [col[1] for col in table_info]
-    new_columns = {
-        "description": "TEXT",
-        "company_description": "TEXT",
-        "seniority_level": "TEXT",
-        "employment_type": "TEXT",
-        "job_function": "TEXT",
-        "industries": "TEXT",
-        "company_overview": "TEXT",
-        "company_website": "TEXT",
-        "company_industry": "TEXT",
-        "company_size": "TEXT",
-    }
-    for col, col_type in new_columns.items():
-        if col not in column_names:
-            logger.info(f"Adding missing column '{col}' to vacancies table.")
-            cursor.execute(f"ALTER TABLE vacancies ADD COLUMN {col} {col_type}")
-
-    # Run History table (remains the same)
+    # Discovery state table
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS discovery_state (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          search_key TEXT NOT NULL UNIQUE,
+          last_seen_max_job_id INTEGER,
+          last_complete_sweep_before_id INTEGER,
+          updated_at TIMESTAMP NOT NULL
+        );
+    """
+    )
+    # Run history table
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS run_history (
@@ -69,19 +70,28 @@ def setup_database():
         )
     """
     )
-
     conn.commit()
-    conn.close()
     logger.info("Database setup complete.")
 
 
-def save_discovered_jobs(jobs: list):
+def setup_database(db_file: str) -> sqlite3.Connection:
+    """
+    Initializes the database connection and creates tables.
+    """
+    conn = sqlite3.connect(
+        db_file, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES, check_same_thread=False
+    )
+    init_db(conn)
+    return conn
+
+
+def save_discovered_jobs(jobs: list, conn: sqlite3.Connection):
     """
     Saves a list of newly discovered jobs to the database.
     """
     if not jobs:
         return
-    conn = sqlite3.connect(DB_FILE)
+    logger.debug(f"Saving {len(jobs)} discovered jobs.")
     cursor = conn.cursor()
     now = datetime.datetime.now()
     jobs_to_insert = [
@@ -96,30 +106,27 @@ def save_discovered_jobs(jobs: list):
     logger.info(
         f"Saved {cursor.rowcount} new discovered jobs. Ignored {len(jobs_to_insert) - cursor.rowcount} duplicates."
     )
-    conn.close()
 
 
-def get_discovered_jobs() -> list:
+def get_jobs_to_enrich(conn: sqlite3.Connection) -> list:
     """
-    Retrieves all jobs with the 'discovered' status, newest first.
+    Retrieves all jobs with 'discovered' or 'enrichment_error' status, newest first.
     """
-    conn = sqlite3.connect(DB_FILE)
+    logger.debug("Getting jobs to enrich.")
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, link, title, company FROM vacancies WHERE status = 'discovered' ORDER BY id DESC"
+        "SELECT id, link, title, company FROM vacancies WHERE status = 'discovered' OR status = 'enrichment_error' ORDER BY id DESC"
     )
     jobs = cursor.fetchall()
-    conn.close()
     logger.info(f"Retrieved {len(jobs)} jobs to be enriched.")
     return jobs
 
 
-def save_enrichment_data(job_id: int, details: dict):
+def save_enrichment_data(job_id: int, details: dict, conn: sqlite3.Connection):
     """
     Updates a job record with its full scraped details and sets status to 'enriched'.
     """
-    logger.debug(f"Enriching job record for job_id: {job_id}")
-    conn = sqlite3.connect(DB_FILE)
+    logger.debug(f"Enriching job_id: {job_id}")
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -134,7 +141,9 @@ def save_enrichment_data(job_id: int, details: dict):
             company_overview = ?,
             company_website = ?,
             company_industry = ?,
-            company_size = ?
+            company_size = ?,
+            match_percentage = ?,
+            analysis = ?
         WHERE id = ?
     """,
         (
@@ -148,69 +157,137 @@ def save_enrichment_data(job_id: int, details: dict):
             details.get("company_website"),
             details.get("company_industry"),
             details.get("company_size"),
+            details.get("match_percentage"),
+            details.get("analysis"),
             job_id,
         ),
     )
     conn.commit()
-    conn.close()
 
 
-def get_enriched_jobs() -> list:
+def save_skill_match_data(
+    job_id: int, match_percentage: int, analysis: str, conn: sqlite3.Connection
+):
+    """
+    Updates a job record with skill match data.
+    """
+    logger.debug(f"Saving skill match data for job_id: {job_id}")
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE vacancies SET
+            match_percentage = ?,
+            analysis = ?
+        WHERE id = ?
+    """,
+        (match_percentage, analysis, job_id),
+    )
+    conn.commit()
+
+
+def get_enriched_jobs(conn: sqlite3.Connection) -> list:
     """
     Retrieves all jobs with the 'enriched' status, newest first.
     """
-    conn = sqlite3.connect(DB_FILE)
+    logger.debug(f"Getting enriched jobs.")
     cursor = conn.cursor()
     # Fetch all necessary fields for final filtering and application
     cursor.execute(
         "SELECT id, link, title, company, description FROM vacancies WHERE status = 'enriched' ORDER BY id DESC"
     )
     jobs = cursor.fetchall()
-    conn.close()
     logger.info(f"Retrieved {len(jobs)} enriched jobs to be processed.")
     return jobs
 
 
-def update_job_status(job_id: int, status: str):
+def get_error_jobs(conn: sqlite3.Connection) -> list:
+    """
+    Retrieves all jobs with the 'error' status, newest first.
+    
+    These are jobs that encountered errors during the application process
+    and will be retried in subsequent runs.
+    
+    Args:
+        conn: Database connection object.
+        
+    Returns:
+        list: List of tuples containing (id, link, title, company, description).
+    """
+    logger.debug(f"Getting jobs with error status for retry.")
+    cursor = conn.cursor()
+    # Fetch all necessary fields for retry attempt
+    cursor.execute(
+        "SELECT id, link, title, company, description FROM vacancies WHERE status = 'error' ORDER BY id DESC"
+    )
+    jobs = cursor.fetchall()
+    logger.info(f"Retrieved {len(jobs)} error jobs to be retried.")
+    return jobs
+
+
+def update_job_status(job_id: int, status: str, conn: sqlite3.Connection):
     """
     Updates the status of a job identified by its job_id.
     """
     logger.debug(f"Updating status to '{status}' for job_id: {job_id}")
-    conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("UPDATE vacancies SET status = ? WHERE id = ?", (status, job_id))
     conn.commit()
-    conn.close()
 
 
 # --- Unchanged functions ---
 
 
-def get_last_run_timestamp() -> datetime.datetime | None:
-    conn = sqlite3.connect(
-        DB_FILE, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
-    )
+def get_last_run_timestamp(conn: sqlite3.Connection) -> datetime.datetime | None:
+    """
+    Retrieves the timestamp of the last bot run from the database.
+    
+    This function is used for monitoring and statistics purposes.
+    It is NOT used for calculating job search time periods (which are now
+    configured statically via JOB_SEARCH_PERIOD_SECONDS).
+    
+    Returns:
+        datetime.datetime | None: Timestamp of the last run, or None if no runs recorded.
+    
+    Note:
+        This function is maintained for backward compatibility and future analytics.
+        See record_run_timestamp() for recording run history.
+    """
     cursor = conn.cursor()
     cursor.execute(
         "SELECT run_timestamp FROM run_history ORDER BY run_timestamp DESC LIMIT 1"
     )
     result = cursor.fetchone()
-    conn.close()
     return result[0] if result else None
 
 
-def record_run_timestamp():
+def record_run_timestamp(conn: sqlite3.Connection) -> None:
+    """
+    Records the current timestamp as a bot run in the database.
+    
+    This function is used for monitoring, statistics, and analytics purposes.
+    It is NOT used for calculating job search time periods (which are now
+    configured statically via JOB_SEARCH_PERIOD_SECONDS).
+    
+    The recorded timestamps can be used for:
+    - Monitoring bot activity and frequency
+    - Generating usage statistics
+    - Debugging and troubleshooting
+    - Future analytics features
+    
+    Raises:
+        sqlite3.Error: If database operation fails.
+    
+    Note:
+        This function is called at the end of each bot run in main.py.
+    """
     now = datetime.datetime.now()
-    conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO run_history (run_timestamp) VALUES (?)", (now,))
     conn.commit()
-    conn.close()
     logger.info(f"Recorded new run timestamp: {now}")
 
 
-def count_todays_applications() -> int:
-    conn = sqlite3.connect(DB_FILE)
+def count_todays_applications(conn: sqlite3.Connection) -> int:
     cursor = conn.cursor()
     today_str = datetime.date.today().strftime("%Y-%m-%d")
     cursor.execute(
@@ -218,5 +295,73 @@ def count_todays_applications() -> int:
         (today_str,),
     )
     count = cursor.fetchone()[0]
-    conn.close()
     return count
+
+
+def get_vacancy_by_id(vacancy_id: int, conn: sqlite3.Connection) -> dict | None:
+    """
+    Retrieves a single vacancy by its ID.
+    """
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM vacancies WHERE id = ?", (vacancy_id,))
+    vacancy = cursor.fetchone()
+    if vacancy:
+        return dict(vacancy)
+    return None
+
+
+# --- Discovery state helpers ---
+
+def get_discovery_state(search_key: str, conn: sqlite3.Connection) -> dict | None:
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM discovery_state WHERE search_key = ?",
+        (search_key,),
+    )
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def upsert_discovery_state(
+    search_key: str,
+    last_seen_max_job_id: int | None,
+    last_complete_sweep_before_id: int | None,
+    conn: sqlite3.Connection,
+):
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO discovery_state (search_key, last_seen_max_job_id, last_complete_sweep_before_id, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(search_key) DO UPDATE SET
+          last_seen_max_job_id = MAX(discovery_state.last_seen_max_job_id, COALESCE(?, discovery_state.last_seen_max_job_id)),
+          last_complete_sweep_before_id = COALESCE(?, discovery_state.last_complete_sweep_before_id),
+          updated_at = CURRENT_TIMESTAMP
+        """,
+        (
+            search_key,
+            last_seen_max_job_id,
+            last_complete_sweep_before_id,
+            last_seen_max_job_id,
+            last_complete_sweep_before_id,
+        ),
+    )
+    conn.commit()
+
+
+def get_existing_vacancy_ids(
+    candidate_ids: list[int], conn: sqlite3.Connection
+) -> set[int]:
+    if not candidate_ids:
+        return set()
+    cursor = conn.cursor()
+    # Build placeholders for IN clause safely
+    placeholders = ",".join(["?"] * len(candidate_ids))
+    cursor.execute(
+        f"SELECT id FROM vacancies WHERE id IN ({placeholders})",
+        candidate_ids,
+    )
+    rows = cursor.fetchall()
+    return {row[0] for row in rows}

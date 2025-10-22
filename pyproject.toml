@@ -1,25 +1,41 @@
 [project]
 name = "linkedin-easy-apply-bot"
-version = "0.1.0"
+version = "0.4.0"
 description = "Add your description here"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
+    "langchain>=1.0.2",
+    "langchain-anthropic>=1.0.0",
+    "langchain-community>=0.4.1",
+    "langchain-ollama>=1.0.0",
+    "langchain-openai>=1.0.1",
     "langdetect>=1.0.9",
     "playwright>=1.55.0",
+    "pydantic>=2.12.3",
+    "python-dotenv>=1.2.1",
+    "tenacity>=9.0.0",
+    "structlog>=24.4.0",
+    "pybreaker>=1.2.0",
+    "langchain-google-genai>=3.0.0",
+    "rapidfuzz>=3.14.3",
+    "python-docx>=1.1.2",
 ]
 
+[project.scripts]
+
 [tool.pytest.ini_options]
-# Убираем asyncio_mode для предотвращения конфликта между pytest-asyncio и pytest-playwright
-asyncio_mode = "auto"
 addopts = "-v --disable-warnings"
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-testpaths = ["tests/unit"]
+testpaths = ["tests"]
 markers = [
     "unit: marks tests as unit tests",
     "integration: marks tests as integration tests"
 ]
+asyncio_mode = "auto"
+asyncio_default_test_loop_scope = "session"
+asyncio_default_fixture_loop_scope = "session"
 
 [dependency-groups]
 dev = [
@@ -28,7 +44,8 @@ dev = [
     "mypy>=1.18.2",
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
-    "pytest-playwright>=0.7.1",
+    "pytest-mock>=3.15.1",
+    "pytest-playwright-asyncio>=0.7.1",
 ]
 
 # ... (другие ваши настройки, например, [tool.uv]) ...
@@ -36,4 +53,32 @@ dev = [
 # Эта секция позволяет задать настройки для конкретных модулей
 [[tool.mypy.overrides]]
 module = "langdetect"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "playwright.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pytest_asyncio"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "langchain_openai"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "langchain_community.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "langchain_anthropic"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "langchain_ollama"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "langchain_core.*"
 ignore_missing_imports = true

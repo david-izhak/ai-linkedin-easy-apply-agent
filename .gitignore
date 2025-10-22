@@ -14,4 +14,25 @@ venv/
 # Configuration file with secrets.
 # Create a config.example.py to commit instead.
 #config.py
-#CV_David_Izhak_Software_Engineer.pdf
+
+# Sensitive documents
+CV_David_Izhak_Software_Engineer.pdf
+.env
+resume.txt
+
+# Development files
+screenshots/
+logs/
+scripts/
+generated_letters/
+*.db
+TODO.md
+tz1.md
+
+
+# Cursor
+.cursorignore
+.cursor/
+memory-bank/
+.vscode/
+.kilocode/

@@ -1,133 +1,258 @@
 import logging
 import re
-from playwright.async_api import BrowserContext, Error as PlaywrightError
-from langdetect import detect
+from playwright.async_api import BrowserContext, TimeoutError
+import asyncio
+import inspect
+from pathlib import Path
 
-from config import (
-    JOB_TITLE,
-    JOB_DESCRIPTION,
-    MAX_APPLICATIONS_PER_DAY,
-    WAIT_BETWEEN_APPLICATIONS,
-    JOB_DESCRIPTION_LANGUAGES,
-)
-from core.utils import wait
+from typing import Optional, List, Sequence, Tuple
+from config import config, AppConfig
 from actions.apply import apply_to_job
-from core.database import get_enriched_jobs, update_job_status
+from core.database import get_enriched_jobs, get_error_jobs, update_job_status
+from llm.vacancy_filter import is_vacancy_suitable
+from core.utils import construct_full_url
+from core.form_filler import (
+    FormFillCoordinator,
+    ModalFlowResources,
+    JobApplicationContext,
+    FormFillError,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _is_job_suitable(job_data: tuple, patterns: dict) -> bool:
-    """Checks if a job matches the defined filter criteria."""
-    _, _, title, _, description = job_data
-    job_title_pattern = patterns["title"]
-    job_description_pattern = patterns["description"]
+def _limit_jobs(jobs: Sequence[Tuple[int, str, str, str]], app_config: AppConfig) -> List[Tuple[int, str, str, str]]:
+    """Apply an optional limit to the jobs to process.
 
+    Args:
+        jobs: Sequence of job tuples as returned by the database layer.
+        app_config: The application configuration object.
+
+    Returns:
+        A list of jobs limited to the requested size if applicable.
+    """
+    limit = app_config.job_limits.max_jobs_to_process
+    if limit and limit < len(jobs):
+        logger.info(
+            f"Limiting processing to {limit} jobs (out of {len(jobs)} discovered)"
+        )
+        return list(jobs[:limit])
+    return list(jobs)
+
+
+async def _is_job_suitable(
+    job_id: int, title: str, description: str | None, app_config: AppConfig
+) -> bool:
+    """Determines if a job is suitable based on title, description, and language filters."""
+    # LLM-based filtering (primary)
     try:
-        job_desc_language = detect(description) if description else "unknown"
+        suitable, reason = await is_vacancy_suitable(job_id, app_config)
+        if suitable:
+            logger.debug("LLM filter result for '%s': True", title)
+            return True
+        else:
+            # If LLM says not suitable, we trust it and stop here.
+            logger.info(
+                "Vacancy '%s' deemed unsuitable by LLM filter. Reason: %s",
+                title,
+                reason,
+            )
+            return False
     except Exception as e:
-        logger.warning("Could not detect language for job title '%s': %s", title, e)
-        job_desc_language = "unknown"
-
-    matches_title = job_title_pattern.search(title) is not None
-    matches_description = job_description_pattern.search(description) is not None
-    matches_language = (
-        "any" in JOB_DESCRIPTION_LANGUAGES
-        or job_desc_language in JOB_DESCRIPTION_LANGUAGES
-    )
-
-    logger.debug(
-        f"Filter results for '{title}': title={matches_title}, desc={matches_description}, lang={matches_language}"
-    )
-    return matches_title and matches_description and matches_language
+        logger.warning(
+            "LLM filtering failed for '%s', falling back to word-based filtering: %s",
+            title,
+            e,
+        )
+        # Fallback to original word-based filtering
+        if description:
+            # Regex matching on description
+            if not re.search(
+                app_config.job_search.job_description_regex,
+                description,
+                re.IGNORECASE,
+            ):
+                logger.debug("Skipping job '%s' due to description mismatch", title)
+                return False
+            return True  # Explicitly return True if fallback succeeds
+        else:
+            return False
 
 
 async def _process_single_job(
     context: BrowserContext,
     job_data: tuple,
-    patterns: dict,
+    app_config: AppConfig,
     should_submit: bool,
-    config_globals: dict,
+    coordinator: FormFillCoordinator,
 ) -> bool:
-    """
-    Processes a single enriched job: final filtering and application.
-    Returns True if an application was successfully submitted, False otherwise.
-    """
-    job_id, link, title, _, _ = job_data
+    """Processes a single job application."""
+    logger.debug(f"Call to function '{__name__}' started.{inspect.stack()[0][3]}")
+    job_id, link, title, _, description = job_data
+    full_url = construct_full_url(link)
+    logger.debug(f"Full URL: {full_url}")
+    cover_letter_path: Optional[Path] = (
+        Path(app_config.form_data.cover_letter_path)
+        if app_config.form_data.cover_letter_path
+        else None
+    )
 
-    if not _is_job_suitable(job_data, patterns):
-        logger.info("Skipping job: Does not match filter criteria.")
-        update_job_status(job_id, "skipped_filter")
+    is_suitable = await _is_job_suitable(job_id, title, description, app_config)
+    if not is_suitable:
+        update_job_status(job_id, "skipped_filter", app_config.session.db_conn)
+        logger.info(f"Skipping job '{title}' as it does not match the filter criteria.")
         return False
 
-    apply_page = None
-    was_applied = False
+    page = None
     try:
-        apply_page = await context.new_page()
-        await apply_to_job(
-            page=apply_page,
-            link=link,
-            config=config_globals,
+        page = await context.new_page()
+        await page.goto(full_url, wait_until="load")
+
+        # Skip postings that are no longer open for applications.
+        closed_locator = page.locator("text=/No longer accepting applications/i")
+        if await closed_locator.count() > 0:
+            logger.info(
+                "Vacancy '%s' is no longer accepting applications. Skipping.", title
+            )
+            update_job_status(
+                job_id, "applications_closed", app_config.session.db_conn
+            )
+            return False
+
+        job_context = JobApplicationContext(
+            job_id=job_id,
+            job_url=full_url,
+            job_title=title,
             should_submit=should_submit,
+            cover_letter_path=cover_letter_path,
+            job_description=description,
         )
+
+        await apply_to_job(
+            page=page,
+            link=full_url,
+            job_context=job_context,
+            coordinator=coordinator,
+        )
+        update_job_status(job_id, "applied", app_config.session.db_conn)
         logger.info(f"Successfully processed application for {title}.")
-        update_job_status(job_id, "applied")
-        was_applied = True
-    except PlaywrightError as e:
+        return True
+    except TimeoutError:
+        logger.error(f"Timeout error processing job ID {job_id}. Skipping.")
+        update_job_status(job_id, "error", app_config.session.db_conn)
+        return False
+    except FormFillError as exc:
         logger.error(
-            f"A Playwright error occurred while applying to job ID {job_id}: {e}"
+            "Form filling failed for job ID %s: %s", job_id, exc, exc_info=True
         )
-        update_job_status(job_id, "error")
+        update_job_status(job_id, "error", app_config.session.db_conn)
+        return False
     except Exception as e:
         logger.error(
-            f"An unexpected error occurred while applying to job ID {job_id}",
-            exc_info=True,
+            f"An unexpected error occurred while processing job ID {job_id}: {e}"
         )
-        update_job_status(job_id, "error")
+        update_job_status(job_id, "error", app_config.session.db_conn)
+        return False
     finally:
-        if apply_page and not (await apply_page.is_closed()):
-            await apply_page.close()
-
-    return was_applied
+        if page and not page.is_closed():
+            await page.close()
 
 
 async def run_processing_phase(
     context: BrowserContext,
     applications_today_count: int,
     should_submit: bool,
-    config_globals: dict,
-):
-    """Runs the processing phase: filtering and applying to enriched jobs."""
+    app_config: AppConfig,
+) -> None:
+    """Runs the processing phase of the bot."""
     logger.info("--- Starting Processing Phase ---")
-    patterns = {
-        "title": re.compile(JOB_TITLE, re.IGNORECASE),
-        "description": re.compile(JOB_DESCRIPTION, re.IGNORECASE),
-    }
-
-    jobs_to_process = get_enriched_jobs()
-    if not jobs_to_process:
-        logger.info("No enriched jobs to process.")
-        return
-
-    for i, job_data in enumerate(jobs_to_process):
-        job_id, _, title, _, _ = job_data
-        logger.info(
-            f"Processing job {i + 1}/{len(jobs_to_process)}: {title} (ID: {job_id})"
-        )
-
-        if applications_today_count >= MAX_APPLICATIONS_PER_DAY:
-            logger.warning("Daily application limit reached. Stopping processing.")
-            break
-
-        was_applied = await _process_single_job(
-            context, job_data, patterns, should_submit, config_globals
-        )
-        if was_applied:
-            applications_today_count += 1
+    max_applications = app_config.general_settings.max_applications_per_day
+    
+    # Prepare form filling coordinator (modal flow only)
+    modal_flow_resources = ModalFlowResources(
+        modal_flow_config=app_config.modal_flow,
+        llm_config=app_config.llm,
+        logger=logger,
+    )
+    form_fill_coordinator = FormFillCoordinator(
+        app_config=app_config,
+        resources=modal_flow_resources,
+        logger=logger,
+    )
+    
+    # First, process enriched jobs
+    enriched_jobs = get_enriched_jobs(app_config.session.db_conn)
+    if enriched_jobs:
+        logger.info(f"Found {len(enriched_jobs)} enriched jobs to process.")
+        limited_enriched_jobs = _limit_jobs(enriched_jobs, app_config)
+        for job_data in limited_enriched_jobs:
+            job_id, _, title, _, _ = job_data
             logger.info(
-                f"Application count for today is now: {applications_today_count}/{MAX_APPLICATIONS_PER_DAY}"
+                f"Processing enriched job {limited_enriched_jobs.index(job_data) + 1}/{len(limited_enriched_jobs)}: {title} (ID: {job_id})"
             )
 
-        wait(WAIT_BETWEEN_APPLICATIONS)
+            if applications_today_count >= max_applications:
+                logger.warning(f"Daily application limit of {max_applications} reached.")
+                break
+
+            if await _process_single_job(
+                context,
+                job_data,
+                app_config,
+                should_submit,
+                form_fill_coordinator,
+            ):
+                applications_today_count += 1
+                if applications_today_count >= max_applications:
+                    logger.info(
+                        f"Daily application limit of {max_applications} reached after this application."
+                    )
+                    break
+            
+            await wait(app_config.general_settings.wait_between_submissions_ms)
+    else:
+        logger.info("No enriched jobs to process.")
+    
+    # Second, retry jobs with error status if we haven't reached the daily limit
+    if applications_today_count < max_applications:
+        error_jobs = get_error_jobs(app_config.session.db_conn)
+        if error_jobs:
+            logger.info(f"Found {len(error_jobs)} jobs with error status to retry.")
+            limited_error_jobs = _limit_jobs(error_jobs, app_config)
+            for job_data in limited_error_jobs:
+                job_id, _, title, _, _ = job_data
+                logger.info(
+                    f"Retrying error job {limited_error_jobs.index(job_data) + 1}/{len(limited_error_jobs)}: {title} (ID: {job_id})"
+                )
+
+                if applications_today_count >= max_applications:
+                    logger.warning(f"Daily application limit of {max_applications} reached.")
+                    break
+
+                if await _process_single_job(
+                    context,
+                    job_data,
+                    app_config,
+                    should_submit,
+                    form_fill_coordinator,
+                ):
+                    applications_today_count += 1
+                    if applications_today_count >= max_applications:
+                        logger.info(
+                            f"Daily application limit of {max_applications} reached after this application."
+                        )
+                        break
+                
+                await wait(app_config.general_settings.wait_between_submissions_ms)
+        else:
+            logger.info("No error jobs to retry.")
+    else:
+        logger.info("Daily application limit reached. Skipping error job retry.")
 
     logger.info("--- Finished Processing Phase ---")
+    await context.close()
+
+
+async def wait(time_ms: int) -> None:
+    """Asynchronously wait for the specified number of milliseconds."""
+    await asyncio.sleep(time_ms / 1000.0)

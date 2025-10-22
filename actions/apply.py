@@ -1,23 +1,33 @@
 from playwright.async_api import Page
 import logging
+from typing import Optional
+
 from core.selectors import selectors
-from apply_form.fill_fields import fill_fields
-from apply_form.wait_for_no_error import wait_for_no_error
-from apply_form.click_next_button import click_next_button
+from core import resilience
+from core.form_filler import (
+    FormFillCoordinator,
+    JobApplicationContext,
+    FillResult,
+)
+from core.form_filler.models import FormFillError
 
 logger = logging.getLogger(__name__)
 
 
 async def click_easy_apply_button(page: Page) -> None:
-    """
-    Clicks the 'Easy Apply' button on a job listing page.
-    """
-    logger.debug("Waiting for and clicking the 'Easy Apply' button.")
-    await page.wait_for_selector(selectors["easy_apply_button_enabled"], timeout=10000)
-    await page.click(selectors["easy_apply_button_enabled"])
+    """Clicks the easy apply button using a resilient selector."""
+    logger.info("Clicking easy apply button...")
+    executor = resilience.get_selector_executor(page)
+    await executor.click(selectors.get("easy_apply_button", "div.jobs-apply-button--top-card button"))
+    logger.debug("Easy apply button is clicked")
 
 
-async def apply_to_job(page: Page, link: str, config, should_submit: bool) -> None:
+async def apply_to_job(
+    page: Page,
+    link: str,
+    job_context: JobApplicationContext,
+    coordinator: FormFillCoordinator,
+) -> FillResult:
     """
     Applies to a single job by navigating to the link, clicking Easy Apply,
     filling the form, and optionally submitting.
@@ -34,34 +44,21 @@ async def apply_to_job(page: Page, link: str, config, should_submit: bool) -> No
             + "Skipping application.",
             exc_info=True,
         )
-        # We raise the exception to be caught by the main loop for status update
-        raise e
+        raise
 
-    max_pages = 5
-    logger.debug(
-        f"Starting to loop through a maximum of {max_pages} application pages."
-    )
-    for i in range(max_pages):
-        logger.debug(f"Processing application page {i+1}.")
-        await fill_fields(page, config)
-        await click_next_button(page)
-        await wait_for_no_error(page)
-
-        # Check if the submit button is present, which means we are on the last page
-        submit_button = await page.query_selector(selectors["submit"])
-        if submit_button:
-            logger.info("Submit button found. Reached the final application page.")
-            break
-
-    submit_button = await page.query_selector(selectors["submit"])
-    if not submit_button:
-        raise RuntimeError(
-            f"Submit button not found after {max_pages} pages. "
-            + "The application form might be too long or have an unknown step."
+    try:
+        result = await coordinator.fill(page, job_context)
+        logger.info(
+            "Form filling completed in mode=%s submitted=%s",
+            result.mode,
+            result.submitted,
         )
-
-    if should_submit:
-        logger.info("SUBMIT mode is ON. Submitting the application...")
-        await submit_button.click()
-    else:
-        logger.info("DRY RUN mode is ON. Application form filled but not submitted.")
+        return result
+    except FormFillError as exc:
+        logger.error(
+            "Form filling failed for job_id=%s: %s",
+            job_context.job_id,
+            exc,
+            exc_info=True,
+        )
+        raise
