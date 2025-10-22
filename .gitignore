@@ -1,0 +1,17 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Session data from Selenium
+linkedin_session/
+
+# Virtual environment
+.venv/
+venv/
+
+.idea/
+
+# Configuration file with secrets.
+# Create a config.example.py to commit instead.
+#config.py
+#CV_David_Izhak_Software_Engineer.pdf

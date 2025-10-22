@@ -1,0 +1,39 @@
+[project]
+name = "linkedin-easy-apply-bot"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "langdetect>=1.0.9",
+    "playwright>=1.55.0",
+]
+
+[tool.pytest.ini_options]
+# Убираем asyncio_mode для предотвращения конфликта между pytest-asyncio и pytest-playwright
+asyncio_mode = "auto"
+addopts = "-v --disable-warnings"
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+testpaths = ["tests/unit"]
+markers = [
+    "unit: marks tests as unit tests",
+    "integration: marks tests as integration tests"
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.9.0",
+    "flake8>=7.3.0",
+    "mypy>=1.18.2",
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "pytest-playwright>=0.7.1",
+]
+
+# ... (другие ваши настройки, например, [tool.uv]) ...
+[tool.mypy]
+# Эта секция позволяет задать настройки для конкретных модулей
+[[tool.mypy.overrides]]
+module = "langdetect"
+ignore_missing_imports = true
