@@ -40,7 +40,7 @@ POLICY:
 - Return STRICT JSON format matching the LLMDecision schema.
 - No invented facts. Respect type, min/max, maxlength, available options.
 - Set confidence to a float between 0.0 (total guess) and 1.0 (certain).
-- If you cannot make a confident decision, set confidence < 0.8 and suggest skipping.
+- If confidence is low (< 0.8), make an optimistic guess. For questions about willingness, agreement, or for boolean/checkbox fields, always choose the affirmative/positive option (e.g., "Yes", "Agree", check the box).
 
 **IMPORTANT:** ALWAYS provide a suggest_rule with:
   - q_pattern: regex pattern to match this field (e.g., "(python|питон)" for Python skill)
