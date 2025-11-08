@@ -1,5 +1,5 @@
 [project]
-name = "linkedin-easy-apply-bot"
+name = "ai-linkedin-easy-apply-agent"
 version = "0.4.0"
 description = "Add your description here"
 requires-python = ">=3.13,<3.14"

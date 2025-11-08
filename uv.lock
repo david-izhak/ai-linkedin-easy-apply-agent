@@ -3,6 +3,69 @@ revision = 3
 requires-python = "==3.13.*"
 
 [[package]]
+name = "ai-linkedin-easy-apply-agent"
+version = "0.4.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "langchain" },
+    { name = "langchain-anthropic" },
+    { name = "langchain-community" },
+    { name = "langchain-google-genai" },
+    { name = "langchain-ollama" },
+    { name = "langchain-openai" },
+    { name = "langdetect" },
+    { name = "playwright" },
+    { name = "pybreaker" },
+    { name = "pydantic" },
+    { name = "python-docx" },
+    { name = "python-dotenv" },
+    { name = "rapidfuzz" },
+    { name = "structlog" },
+    { name = "tenacity" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "black" },
+    { name = "flake8" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-mock" },
+    { name = "pytest-playwright-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "langchain", specifier = ">=1.0.2" },
+    { name = "langchain-anthropic", specifier = ">=1.0.0" },
+    { name = "langchain-community", specifier = ">=0.4.1" },
+    { name = "langchain-google-genai", specifier = ">=3.0.0" },
+    { name = "langchain-ollama", specifier = ">=1.0.0" },
+    { name = "langchain-openai", specifier = ">=1.0.1" },
+    { name = "langdetect", specifier = ">=1.0.9" },
+    { name = "playwright", specifier = ">=1.55.0" },
+    { name = "pybreaker", specifier = ">=1.2.0" },
+    { name = "pydantic", specifier = ">=2.12.3" },
+    { name = "python-docx", specifier = ">=1.1.2" },
+    { name = "python-dotenv", specifier = ">=1.2.1" },
+    { name = "rapidfuzz", specifier = ">=3.14.3" },
+    { name = "structlog", specifier = ">=24.4.0" },
+    { name = "tenacity", specifier = ">=9.0.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "black", specifier = ">=25.9.0" },
+    { name = "flake8", specifier = ">=7.3.0" },
+    { name = "mypy", specifier = ">=1.18.2" },
+    { name = "pytest", specifier = ">=8.4.2" },
+    { name = "pytest-asyncio", specifier = ">=1.2.0" },
+    { name = "pytest-mock", specifier = ">=3.15.1" },
+    { name = "pytest-playwright-asyncio", specifier = ">=0.7.1" },
+]
+
+[[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -738,69 +801,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/09/51/58d561dd40ec564509724f0a6a7148aa8090143208ef5d06b73b7fc90d31/langsmith-0.4.37.tar.gz", hash = "sha256:d9a0eb6dd93f89843ac982c9f92be93cf2bcabbe19957f362c547766c7366c71", size = 959089, upload-time = "2025-10-15T22:33:59.465Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/14/e8/edff4de49cf364eb9ee88d13da0a555844df32438413bf53d90d507b97cd/langsmith-0.4.37-py3-none-any.whl", hash = "sha256:e34a94ce7277646299e4703a0f6e2d2c43647a28e8b800bb7ef82fd87a0ec766", size = 396111, upload-time = "2025-10-15T22:33:57.392Z" },
-]
-
-[[package]]
-name = "linkedin-easy-apply-bot"
-version = "0.4.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "langchain" },
-    { name = "langchain-anthropic" },
-    { name = "langchain-community" },
-    { name = "langchain-google-genai" },
-    { name = "langchain-ollama" },
-    { name = "langchain-openai" },
-    { name = "langdetect" },
-    { name = "playwright" },
-    { name = "pybreaker" },
-    { name = "pydantic" },
-    { name = "python-docx" },
-    { name = "python-dotenv" },
-    { name = "rapidfuzz" },
-    { name = "structlog" },
-    { name = "tenacity" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "black" },
-    { name = "flake8" },
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-mock" },
-    { name = "pytest-playwright-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "langchain", specifier = ">=1.0.2" },
-    { name = "langchain-anthropic", specifier = ">=1.0.0" },
-    { name = "langchain-community", specifier = ">=0.4.1" },
-    { name = "langchain-google-genai", specifier = ">=3.0.0" },
-    { name = "langchain-ollama", specifier = ">=1.0.0" },
-    { name = "langchain-openai", specifier = ">=1.0.1" },
-    { name = "langdetect", specifier = ">=1.0.9" },
-    { name = "playwright", specifier = ">=1.55.0" },
-    { name = "pybreaker", specifier = ">=1.2.0" },
-    { name = "pydantic", specifier = ">=2.12.3" },
-    { name = "python-docx", specifier = ">=1.1.2" },
-    { name = "python-dotenv", specifier = ">=1.2.1" },
-    { name = "rapidfuzz", specifier = ">=3.14.3" },
-    { name = "structlog", specifier = ">=24.4.0" },
-    { name = "tenacity", specifier = ">=9.0.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "black", specifier = ">=25.9.0" },
-    { name = "flake8", specifier = ">=7.3.0" },
-    { name = "mypy", specifier = ">=1.18.2" },
-    { name = "pytest", specifier = ">=8.4.2" },
-    { name = "pytest-asyncio", specifier = ">=1.2.0" },
-    { name = "pytest-mock", specifier = ">=3.15.1" },
-    { name = "pytest-playwright-asyncio", specifier = ">=0.7.1" },
 ]
 
 [[package]]

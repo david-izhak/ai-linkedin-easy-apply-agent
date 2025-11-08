@@ -94,7 +94,7 @@ class FormDataConfig(BaseSettings):
 
     phone: str = "0535487266"
     cv_path: Path = Path(
-        "D:/py/linkedin-easy-apply-bot/CV_David_Izhak_Software_Engineer.pdf"
+        "D:/py/ai-linkedin-easy-apply-agent/CV_David_Izhak_Software_Engineer.pdf"
     )
     cover_letter_path: Optional[Path] = None
     delete_cover_letter_after_use: bool = False
