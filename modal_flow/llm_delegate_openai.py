@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 
 from pydantic import HttpUrl
 
+from llm.prompts import FIELD_DECISION_ENGINE_PROMPT
 from modal_flow.llm_delegate import BaseLLMDelegate, LLMDecision
 from modal_flow.profile_schema import CandidateProfile
 
@@ -33,49 +34,7 @@ class OpenAILLMDelegate(BaseLLMDelegate):
             llm_client: LLMClient instance from llm.llm_client
         """
         self.llm_client = llm_client
-        self.system_prompt = """ROLE: Field Decision Engine
-
-POLICY:
-- Use ONLY candidate_profile and field_context provided.
-- Return STRICT JSON format matching the LLMDecision schema.
-- No invented facts. Respect type, min/max, maxlength, available options.
-- Set confidence to a float between 0.0 (total guess) and 1.0 (certain).
-- If confidence is low (< 0.8), make an optimistic guess. For questions about willingness, agreement, or for boolean/checkbox fields, always choose the affirmative/positive option (e.g., "Yes", "Agree", check the box).
-
-**IMPORTANT:** ALWAYS provide a suggest_rule with:
-  - q_pattern: regex pattern to match this field (e.g., "(python|питон)" for Python skill)
-  - strategy: how to fill this field in the future
-    - For boolean/checkbox fields: use "literal" strategy with value true/false
-    - For text fields: use "profile_key" strategy with a profile key
-    - For combobox fields (autocomplete): use "profile_key" strategy to provide the full text value
-    - For select fields (with available options): use "one_of_options" strategy
-
-OUTPUT FORMAT:
-{
-  "decision": "select|text|number|check|skip",
-  "value": <appropriate value>,
-  "confidence": <0.0-1.0>,
-  "suggest_rule": {
-    "q_pattern": "<regex or keywords to match this field>",
-    "strategy": {
-      "kind": "literal|profile_key|one_of_options|numeric_from_profile",
-      "params": {<strategy-specific params>}
-    }
-  }
-}
-
-EXAMPLES OF suggest_rule:
-1. Checkbox "Python": {"q_pattern": "(python|питон)", "strategy": {"kind": "literal", "params": {"value": true}}}
-2. Checkbox "Java": {"q_pattern": "(java)", "strategy": {"kind": "literal", "params": {"value": true}}}
-3. Radio "Yes/No": {"q_pattern": "(willing to relocate|готовность к переезду)", "strategy": {"kind": "one_of_options", "params": {"preferred": ["Yes", "Да"]}}}
-4. Combobox "Location (city)": {"q_pattern": "(location.*city|город)", "strategy": {"kind": "profile_key", "params": {"key": "address.full_city"}}}
-
-**SPECIAL CASE - Combobox/Autocomplete Fields:**
-When field_type is "combobox" (autocomplete with dynamic options), provide the FULL, COMPLETE value that should appear in the dropdown.
-For example, for "Location (city)" with candidate in "Rishon LeZion", provide the full format like "Rishon LeZion, Center District, Israel".
-This value will be used to search in the dynamic dropdown list.
-
-TEMPERATURE: 0 (deterministic output required)"""
+        self.system_prompt = FIELD_DECISION_ENGINE_PROMPT
     
     async def decide(
         self,
