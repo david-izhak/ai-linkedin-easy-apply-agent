@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -89,91 +90,26 @@ class WorkplaceConfig(BaseSettings):
     hybrid: bool = True
 
 
+def _load_profile_data() -> Dict[str, Any]:
+    """Загружает данные профиля из JSON-файла."""
+    profile_path = Path(__file__).parent / "config" / "profile_example.json"
+    if profile_path.exists():
+        with open(profile_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
 class FormDataConfig(BaseSettings):
     """Configuration for filling out job application forms."""
 
-    phone: str = "0535487266"
-    cv_path: Path = Path(
-        "D:/py/ai-linkedin-easy-apply-agent/CV_David_Izhak_Software_Engineer.pdf"
-    )
+    phone: str = Field(..., validation_alias="PHONE")
+    cv_path: Path = Field(..., validation_alias="CV_PATH")
     cover_letter_path: Optional[Path] = None
-    delete_cover_letter_after_use: bool = False
+    delete_cover_letter_after_use: bool = Field(
+        True, validation_alias="DELETE_COVER_LETTER_AFTER_USE"
+    )
     home_city: str = "Rishon LeZion, Israel"
-    years_of_experience: Dict[str, int] = {
-        "spring": 7,
-        "java": 7,
-        "mongodb": 3,
-        "kubernetes": 3,
-        "CI/CD": 5,
-        "python": 3,
-        "html": 7,
-        "google cloud": 2,
-        "docker": 5,
-        "css": 7,
-        "typescript": 3,
-        "aws": 3,
-        "gcp": 2,
-        "azure": 2,
-        "kafka": 5,
-        "rabbitmq": 3,
-        "rest": 7,
-        "sql": 7,
-        "microservices": 5,
-        "jpa": 6,
-        "mvc": 4,
-        "jdbc": 4,
-        "hibernate": 4,
-        "junit": 5,
-        "mockito": 3,
-        "lombok": 7,
-        "grpc": 2,
-        "json": 6,
-        "maven": 5,
-        "gradle": 5,
-        "pip": 3,
-        "poetry": 2,
-        "uv": 1,
-        "testcontainers": 2,
-        "liquibase": 3,
-        "spark": 2,
-        "agents": 2,
-        "mcp": 2,
-        "fastmcp": 2,
-        "langchain": 1,
-        "langgraph": 1,
-        "bots": 1,
-        "etl": 3,
-        "elt": 3,
-        "postman": 7,
-        "protobuf": 2,
-        "swagger": 2,
-        "telegram": 2,
-        "helm": 4,
-        "kubectl": 5,
-        "k9s": 4,
-        "kibana": 5,
-        "grafana": 3,
-        "prometheus": 5,
-        "elasticsearch": 3,
-        "bash": 7,
-        "artifactory": 3,
-        "jenkins": 4,
-        "databricks": 2,
-        "ec2": 4,
-        "s3": 3,
-        "lambda": 2,
-        "gpts": 2,
-        "cassandra": 2,
-        "scylladb": 2,
-        "postgresql": 6,
-        "mysql": 6,
-        "sqlite": 4,
-        "redis": 3,
-        "firebase": 2,
-        "dynamodb": 2,
-        "agile": 7,
-        "jira": 7,
-    }
+    years_of_experience: Dict[str, int] = Field(default_factory=lambda: _load_profile_data().get("years_experience", {}))
     language_proficiency: Dict[str, str] = {
         "english": "professional",
         "russian": "native",
@@ -261,11 +197,11 @@ class LLMSettings(BaseSettings):
 
     @model_validator(mode="after")
     def check_api_key_for_provider(self) -> "LLMSettings":
-        if self.LLM_PROVIDER in ["openai", "anthropic"] and not self.LLM_API_KEY:
+        if self.LLM_PROVIDER in ["openai", "anthropic", "google"] and not self.LLM_API_KEY:
             if self.LLM_BASE_URL and "localhost" in self.LLM_BASE_URL:
                 return self
             raise ValueError(
-                "LLM_API_KEY is required for openai/anthropic providers. Please set it in your .env file."
+                "LLM_API_KEY is required for openai/anthropic/google providers. Please set it in your .env file."
             )
         return self
 
