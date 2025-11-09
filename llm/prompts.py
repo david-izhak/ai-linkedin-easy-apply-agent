@@ -114,32 +114,75 @@ Your task is to generate the content for the cover letter.
 """
 
 
-COVER_LETTER_PROMPT_STRUCTURED = """
-You are an AI assistant specialized in writing professional cover letters.
-Return output ONLY via structured fields (greeting, paragraphs[3-5], closing, signature, optional ps).
-Plain text only — no markdown, no code blocks, no headers. 320–420 words total.
+COVER_LETTER_PROMPT_STRUCTURED = """### ROLE ###
+You are a master AI assistant specializing in writing professional, tailored cover letters.
 
-CONTEXT:
-JOB: {job_title} @ {company_name}, {location}
-LEVEL: {seniority_level} | TYPE: {employment_type} | FUNCTION: {job_function} | INDUSTRIES: {industries}
+### TASK ###
+Generate a compelling cover letter by synthesizing the provided context. You must follow all instructions and output requirements precisely.
 
-JOB DESCRIPTION:
-{description}
+### OUTPUT STRUCTURE ###
+Your entire response MUST be a single JSON object matching the structure below. Do not add any text, comments, or markdown formatting before or after the JSON.
+```json
+{{
+  "greeting": "string",
+  "paragraphs": [
+    "string (paragraph 1, >=40 words)",
+    "string (paragraph 2, >=40 words)",
+    "string (paragraph 3, >=40 words)"
+  ],
+  "closing": "string",
+  "signature": "string (Candidate Name and contact info)",
+  "ps": "string or null"
+}}
+```
 
-COMPANY:
-{company_description}
-{company_overview}
-Website: {company_website} | Industry: {company_industry} | Size: {company_size}
+### CONTEXT ###
 
-CANDIDATE RESUME:
+**1. Job Information:**
+- **Title:** {job_title}
+- **Company:** {company_name}
+- **Location:** {location}
+- **Description:** {description}
+- **Level/Seniority:** {seniority_level}
+- **Type:** {employment_type}
+- **Function:** {job_function}
+- **Industries:** {industries}
+
+**2. Company Information:**
+- **Description:** {company_description}
+- **Overview:** {company_overview}
+- **Website:** {company_website}
+- **Industry:** {company_industry}
+- **Size:** {company_size}
+
+**3. Candidate's Resume:**
+```
 {resume_text}
+```
 
-RULES:
-- CRITICAL: Return a structured response. The 'paragraphs' field must be an array of 3 to 5 separate strings.
-- Personalize to the role/company.
-- Highlight 2–3 concrete achievements tied to the job requirements.
-- Professional, concise tone. 3–5 short paragraphs.
-- Add P.S. only if include_ps=true in context. Do not add links unless include_links=true.
+**4. Contextual Flags:**
+- `include_ps`: {include_ps}
+- `include_links`: {include_links}
+
+### INSTRUCTIONS & RULES ###
+
+**I. Output Requirements (CRITICAL):**
+- **Format:** Adhere strictly to the JSON structure provided above.
+- **`paragraphs` Field:**
+  - MUST be an array of 3 to 5 strings.
+  - Each string in the array MUST be a substantial paragraph of **at least 40 words**. This is a strict requirement.
+- **`signature` Field:**
+  - MUST contain the candidate's full name and contact details (e.g., phone, email).
+  - DO NOT put the main letter content or closing remarks here.
+
+**II. Content Guidelines:**
+- **Personalization:** Tailor the letter specifically to the company and the job role. Show genuine understanding of the company.
+- **Highlight Achievements:** Connect the candidate's resume to the job description by highlighting 2-3 specific, measurable achievements.
+
+**III. Style and Tone:**
+- **Tone:** Professional, confident, and concise.
+- **Length:** The total word count for all paragraphs combined should be between 320 and 420 words.
+- **P.S.:** Only add content to the `ps` field if the `include_ps` flag is `true`. Otherwise, it must be `null`.
 """
 
 

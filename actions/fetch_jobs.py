@@ -1,16 +1,14 @@
-from playwright.async_api import Page, Locator
+from playwright.async_api import Page
 import re
 import logging
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 from core.selectors import selectors
 from core.utils import (
-    # wait,
     make_search_key,
     wait_for_any_selector,
     construct_full_url,
-    # check_any_selector_present
 )
-from config import config, WorkplaceConfig  # Import new config object
+from config import config  # Import new config object
 from core import database
 from core import resilience
 import sqlite3

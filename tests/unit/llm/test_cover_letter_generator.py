@@ -50,7 +50,7 @@ def test_generate_cover_letter_success(
 ):
     """Test successful generation of a cover letter using the structured approach."""
     vacancy = {
-        "id": "vac-123",
+        "id": 123,
         "title": "Software Engineer",
         "company": "Tech Corp",
         "description": "A great job.",
@@ -87,7 +87,7 @@ def test_generate_cover_letter_validation_error_retry(
     app_config,
 ):
     """Test the retry mechanism on ValidationError."""
-    vacancy = {"id": "vac-1", "title": "Job"}
+    vacancy = {"id": 1, "title": "Job"}
     mock_db_get_vacancy.return_value = vacancy
 
     # First call raises a validation error, second call succeeds
@@ -119,18 +119,18 @@ def test_generate_cover_letter_vacancy_not_found(
 ):
     """Test that VacancyNotFoundError is raised when the vacancy is not in the DB."""
     mock_db_get_vacancy.return_value = None
-    with pytest.raises(VacancyNotFoundError):
-        generate_cover_letter("non-existent-id", app_config)
+    with pytest.raises(VacancyNotFoundError, match="Vacancy with ID 999 was not found in the database"):
+        generate_cover_letter(999, app_config)
 
 
 def test_generate_cover_letter_resume_read_error(
     mock_db_get_vacancy: MagicMock, mock_read_resume: MagicMock, app_config
 ):
     """Test that ResumeReadError is propagated correctly."""
-    mock_db_get_vacancy.return_value = {"id": "vac-1", "title": "Job"}
+    mock_db_get_vacancy.return_value = {"id": 1, "title": "Job"}
     mock_read_resume.side_effect = ResumeReadError("File not found")
-    with pytest.raises(ResumeReadError):
-        generate_cover_letter("vac-1", app_config)
+    with pytest.raises(ResumeReadError, match="File not found"):
+        generate_cover_letter(1, app_config)
 
 
 def test_generate_cover_letter_llm_error(
@@ -141,7 +141,7 @@ def test_generate_cover_letter_llm_error(
     app_config,
 ):
     """Test that LLM errors are caught and raised as CoverLetterGenerationError."""
-    vacancy = {"id": "vac-1", "title": "Job"}
+    vacancy = {"id": 1, "title": "Job"}
     mock_db_get_vacancy.return_value = vacancy
 
     mock_llm_client.generate_structured_response.side_effect = LLMGenerationError(

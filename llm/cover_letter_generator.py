@@ -70,14 +70,17 @@ def generate_cover_letter(
             "company_industry": job.get("company_industry", NOT_SPECIFIED),
             "company_size": job.get("company_size", NOT_SPECIFIED),
             "resume_text": read_resume_text(app_config),
+            # Add flags to the inputs dictionary to be used in the prompt template
+            "include_ps": str(include_ps).lower(),
+            "include_links": str(include_links).lower(),
         }
 
         # Obtaining an instance of the LLM client
         llm = get_llm_client(app_config.llm)
 
         # Prepare messages
-        flags_line = f"\nCONTEXT FLAGS: include_ps={str(include_ps).lower()}, include_links={str(include_links).lower()}"
-        prompt = COVER_LETTER_PROMPT_STRUCTURED.format(**inputs) + flags_line
+        # The flags are now part of the inputs, so we can format directly.
+        prompt = COVER_LETTER_PROMPT_STRUCTURED.format(**inputs)
         system_message = (
             "Output only via structured fields. "
             "No commentary or explanations outside the fields."
