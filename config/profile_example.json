@@ -94,7 +94,37 @@
     "validation": 6,
     "vector_stores": 2,
     "prompt engineering": 2,
-    "cloud environments": 5
+    "cloud environments": 5,
+    "communication skills": 9,
+    "curiosity about ai": 2,
+    "leadership in technical projects": 3,
+    "mentoring abilities": 3,
+    "passion for innovation": 6,
+    "backend/services": 9,
+    "containers": 7,
+    "full-stack awareness": 5,
+    "iac": 5,
+    "infrastructure": 5,
+    "observability": 4,
+    "product sense": 7,
+    "working with customers/founders": 3,
+    "enterprise-scale application development": 5,
+    "relational databases": 9,
+    "communication protocols": 7,
+    "fast learner": 9,
+    "interpersonal skills": 7,
+    "presentation skills": 5,
+    "end-to-end project delivery": 4,
+    "on-call rotation": 2,
+    "production-grade services": 7,
+    "teamwork": 9,
+    "early-stage startup environments": 4,
+    "work independently": 4,
+    "ai code generation tools": 2,
+    "asynchronous code": 4,
+    "codex": 1,
+    "copilot": 2,
+    "vector databases": 1
   },
   "education": {
     "level": "bachelor",
@@ -152,8 +182,8 @@
   },
   "salary_expectation": {
     "monthly_net_nis": 35000,
-    "monthly_net_usd": 11000,
-    "monthly_net_eur": 10000
+    "monthly_net_usd": 10800,
+    "monthly_net_eur": 9300
   },
   "work_authorization": {
     "IL": "yes",
@@ -287,6 +317,19 @@
   ],
   "work_history": [
     {
+      "company": "opensource project",
+      "title": "AI automation Software Engineer",
+      "location": "Israel",
+      "start_date": "2025-09",
+      "end_date": "Present",
+      "url": "https://github.com/david-izhak/ai-linkedin-easy-apply-agent",
+      "highlights": [
+        "Developed and maintained AI LinkedIn Easy Apply Agent: the Playwright-driven discovery → enrichment → processing pipeline with persistent browser contexts, SQLite run counters, and configurable BOT_MODE modes to safely automate LinkedIn Easy Apply submissions.",
+        "Improved automation resilience with Pydantic-driven selector retries, circuit breakers, structured logging, and faster performance through parallel waits and event-based sync.",
+        "Our advanced AI-assisted screening system provides structured LLM skill-matching, automated tracking of match analytics, and a rule-based modal form runner. For intricate, multi-step applications, the platform incorporates learning capabilities and leverages LLM delegation as a fallback mechanism."
+      ]
+    },
+    {
       "company": "Amdocs",
       "title": "Data Software Engineer",
       "location": "Raanana, Israel",
@@ -339,14 +382,14 @@
     }
   ],
   "education_notes": "Code samples and recommendations are available on request.",
-  "total_experience_years": 8,
+  "total_experience_years": 9,
   "seniority": {
     "level": "Senior",
     "roles": ["Senior Backend Developer", "Data Software Engineer"],
     "seniority_years": 5
   },
   "resume_metadata": {
-    "last_updated": "2025-09",
+    "last_updated": "2025-11",
     "source_file": "resume.txt"
   },
   "work_format_preference": "any"
