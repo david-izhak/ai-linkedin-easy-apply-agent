@@ -47,7 +47,7 @@ selectors = {
     "job_description": "div#job-details",
     "company_profile_link": "div.job-details-jobs-unified-top-card__company-name a",
     "company_description": ".jobs-company__company-description",
-    "job_criteria_list": ".jobs-description-section__body .jobs-description-details__list-item",
+    "employment_type_details": "div.job-details-fit-level-preferences button",
 
     # Company About page
     "company_about_overview": "section.org-about-module__margin-bottom p",

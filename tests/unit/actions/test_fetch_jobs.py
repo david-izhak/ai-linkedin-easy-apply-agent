@@ -274,48 +274,35 @@ class TestScrapeJobPageDetails:
         """Test successful scraping of job page details."""
         mock_page = AsyncMock()
 
-        # Mock description element
+        # Mock description and company description elements
         mock_desc_element = AsyncMock()
-        mock_page.query_selector.return_value = mock_desc_element
         mock_desc_element.inner_text.return_value = "Job description here"
-
-        # For the second call (company description)
+        
         mock_comp_desc_element = AsyncMock()
+        mock_comp_desc_element.inner_text.return_value = "Company description here"
+
         mock_page.query_selector.side_effect = [
             mock_desc_element,
             mock_comp_desc_element,
-            None,
         ]
-        mock_comp_desc_element.inner_text.return_value = "Company description here"
 
-        # For the third call (criteria elements)
-        mock_criteria_element1 = AsyncMock()
-        mock_criteria_element2 = AsyncMock()
+        # Mock employment type elements
+        mock_employment_type1 = AsyncMock()
+        mock_employment_type1.inner_text.return_value = "Full-time"
+        
+        mock_employment_type2 = AsyncMock()
+        mock_employment_type2.inner_text.return_value = "Hybrid"
+        
         mock_page.query_selector_all.return_value = [
-            mock_criteria_element1,
-            mock_criteria_element2,
+            mock_employment_type1,
+            mock_employment_type2,
         ]
-
-        # Mock header and list elements for criteria
-        mock_header1 = AsyncMock()
-        mock_list1 = AsyncMock()
-        mock_header2 = AsyncMock()
-        mock_list2 = AsyncMock()
-
-        mock_criteria_element1.query_selector.side_effect = [mock_header1, mock_list1]
-        mock_criteria_element2.query_selector.side_effect = [mock_header2, mock_list2]
-
-        mock_header1.inner_text.return_value = "Seniority Level"
-        mock_list1.inner_text.return_value = "Mid-Senior level"
-        mock_header2.inner_text.return_value = "Employment Type"
-        mock_list2.inner_text.return_value = "Full-time"
 
         result = await _scrape_job_page_details(mock_page, "/job/123")
 
         assert result["description"] == "Job description here"
         assert result["company_description"] == "Company description here"
-        assert result["seniority_level"] == "Mid-Senior level"
-        assert result["employment_type"] == "Full-time"
+        assert result["employment_type"] == "Full-time, Hybrid"
 
 
 class TestScrapeCompanyAboutPage:
@@ -388,7 +375,6 @@ class TestFetchJobDetails:
         mock_scrape_job_page_details.return_value = {
             "description": "Job description",
             "company_description": "Company description",
-            "seniority_level": "Mid-Senior level",
             "employment_type": "Full-time",
         }
 
@@ -418,7 +404,6 @@ class TestFetchJobDetails:
         # Check that all details are merged correctly
         assert result["description"] == "Job description"
         assert result["company_description"] == "Company description"
-        assert result["seniority_level"] == "Mid-Senior level"
         assert result["employment_type"] == "Full-time"
         assert result["company_overview"] == "Company overview"
         assert result["company_website"] == "https://company.com"

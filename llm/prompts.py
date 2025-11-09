@@ -82,10 +82,7 @@ You are an AI assistant specialized in writing professional cover letters.
 - **Company:** {company_name}
 - **Location:** {location}
 - **Job Description:** {description}
-- **Job Level:** {seniority_level}
 - **Employment Type:** {employment_type}
-- **Field:** {job_function}
-- **Industries:** {industries}
 
 ---
 **COMPANY INFORMATION:**
@@ -143,10 +140,7 @@ Your entire response MUST be a single JSON object matching the structure below. 
 - **Company:** {company_name}
 - **Location:** {location}
 - **Description:** {description}
-- **Level/Seniority:** {seniority_level}
 - **Type:** {employment_type}
-- **Function:** {job_function}
-- **Industries:** {industries}
 
 **2. Company Information:**
 - **Description:** {company_description}

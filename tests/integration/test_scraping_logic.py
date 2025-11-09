@@ -60,9 +60,7 @@ class TestScrapingLogic:
         assert "Tech Innovations Inc. is a leader" in details.get(
             "company_description", ""
         )
-        assert details.get("seniority_level") == "Mid-Senior level"
-        assert details.get("employment_type") == "Full-time"
-        assert details.get("industries") == "IT Services and IT Consulting"
+        assert details.get("employment_type") == "Hybrid, Full-time"
 
         # Assertions for company about page details
         assert "forward-thinking technology company" in details.get(

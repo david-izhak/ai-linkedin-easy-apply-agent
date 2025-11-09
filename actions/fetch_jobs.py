@@ -374,32 +374,21 @@ async def _scrape_job_page_details(page: Page, link: str) -> dict:
         )
 
     try:
-        criteria_elements = await page.query_selector_all(
-            selectors["job_criteria_list"]
+        employment_type_elements = await page.query_selector_all(
+            selectors["employment_type_details"]
         )
-        logger.debug(f"Found {len(criteria_elements)} job criteria elements. criteria_elements: {criteria_elements}")
-        for element in criteria_elements:
-            header_element = await element.query_selector("h3")
-            list_items_element = await element.query_selector("ul")
-            if header_element and list_items_element:
-                header_text = (await header_element.inner_text()).strip().lower()
-                logger.debug(f"Found job criteria header: {header_text}")
-                list_items_text = (await list_items_element.inner_text()).strip()
-                logger.debug(f"Found job criteria list items: {list_items_text}")
-                key_map = {
-                    "seniority level": "seniority_level",
-                    "employment type": "employment_type",
-                    "job function": "job_function",
-                    "industries": "industries",
-                }
-                logger.debug(f"Found job criteria keys: {key_map}")
-                if header_text in key_map:
-                    details[key_map[header_text]] = list_items_text
+        if employment_type_elements:
+            employment_types = [
+                await el.inner_text() for el in employment_type_elements
+            ]
+            details["employment_type"] = ", ".join(employment_types)
+            logger.debug(f"Found employment type: {details['employment_type']}")
     except Exception as e:
         logger.warning(
-            f"Could not fetch all job criteria for {link}. Exception: {e}",
+            f"Could not fetch employment type for {link}. Exception: {e}",
             exc_info=True,
         )
+        
     return details
 
 
