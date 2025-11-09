@@ -16,7 +16,6 @@ venv/
 #config.py
 
 # Sensitive documents
-CV_David_Izhak_Software_Engineer.pdf
 .env
 resume.txt
 
