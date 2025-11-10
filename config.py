@@ -172,6 +172,21 @@ class PerformanceConfig(BaseSettings):
     max_noncritical_consecutive_errors: int = 5
 
 
+class DiagnosticsConfig(BaseSettings):
+    """Diagnostics collection settings for failures."""
+
+    enable_on_failure: bool = False
+    capture_screenshot: bool = True
+    capture_html: bool = True
+    capture_console_log: bool = True
+    capture_har: bool = False
+    capture_trace: bool = False
+    output_dir: Path = Path("./logs/diagnostics")
+    max_artifacts_per_run: int = 10
+    pii_mask_patterns: List[str] = []
+    phases_enabled: List[str] = ["discovery", "enrichment", "processing"]
+
+
 class LLMSettings(BaseSettings):
     """LLM Configuration"""
 
@@ -256,6 +271,7 @@ class AppConfig(BaseSettings):
     bot_mode: BotModeConfig = BotModeConfig()
     job_limits: JobLimitsConfig = JobLimitsConfig()
     performance: PerformanceConfig = PerformanceConfig()
+    diagnostics: DiagnosticsConfig = DiagnosticsConfig()
     llm: LLMSettings = LLMSettings()
     modal_flow: ModalFlowConfig = ModalFlowConfig()
 

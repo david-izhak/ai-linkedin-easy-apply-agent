@@ -9,6 +9,7 @@ from playwright.async_api import BrowserContext, Error as PlaywrightError, Page
 from config import config, AppConfig # Import the new config object
 from actions.fetch_jobs import fetch_job_details
 from core.database import get_jobs_to_enrich, save_enrichment_data, update_job_status
+from diagnostics import DiagnosticOptions, DiagnosticContext, capture_on_failure
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +170,30 @@ async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, ti
             f"All {max_attempts} attempts exhausted. A Playwright error occurred "
             f"while enriching job ID {job_id} at URL {link}: {e}"
         )
-        await _save_error_snapshot(page, job_id, link)
+        # Collect diagnostics if enabled
+        await capture_on_failure(
+            context,
+            page,
+            DiagnosticOptions(
+                enable_on_failure=app_config.diagnostics.enable_on_failure,
+                capture_screenshot=app_config.diagnostics.capture_screenshot,
+                capture_html=app_config.diagnostics.capture_html,
+                capture_console_log=app_config.diagnostics.capture_console_log,
+                capture_har=app_config.diagnostics.capture_har,
+                capture_trace=app_config.diagnostics.capture_trace,
+                output_dir=app_config.diagnostics.output_dir,
+                max_artifacts_per_run=app_config.diagnostics.max_artifacts_per_run,
+                pii_mask_patterns=app_config.diagnostics.pii_mask_patterns,
+                phases_enabled=app_config.diagnostics.phases_enabled,
+            ),
+            DiagnosticContext(
+                phase="enrichment",
+                job_id=job_id,
+                link=link,
+                error=e,
+                tracker_state=noncritical_error_tracker or {},
+            ),
+        )
         update_job_status(job_id, "enrichment_error", app_config.session.db_conn)
         return False
     except Exception as e:  # noqa: BLE001
@@ -178,7 +202,29 @@ async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, ti
             f"while enriching job ID {job_id} at URL {link}. Exception: {e}",
             exc_info=True,
         )
-        await _save_error_snapshot(page, job_id, link)
+        await capture_on_failure(
+            context,
+            page,
+            DiagnosticOptions(
+                enable_on_failure=app_config.diagnostics.enable_on_failure,
+                capture_screenshot=app_config.diagnostics.capture_screenshot,
+                capture_html=app_config.diagnostics.capture_html,
+                capture_console_log=app_config.diagnostics.capture_console_log,
+                capture_har=app_config.diagnostics.capture_har,
+                capture_trace=app_config.diagnostics.capture_trace,
+                output_dir=app_config.diagnostics.output_dir,
+                max_artifacts_per_run=app_config.diagnostics.max_artifacts_per_run,
+                pii_mask_patterns=app_config.diagnostics.pii_mask_patterns,
+                phases_enabled=app_config.diagnostics.phases_enabled,
+            ),
+            DiagnosticContext(
+                phase="enrichment",
+                job_id=job_id,
+                link=link,
+                error=e,
+                tracker_state=noncritical_error_tracker or {},
+            ),
+        )
         update_job_status(job_id, "enrichment_error", app_config.session.db_conn)
         return False
     finally:

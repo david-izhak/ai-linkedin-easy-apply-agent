@@ -7,6 +7,7 @@ from pathlib import Path
 
 from typing import Optional, List, Sequence, Tuple
 from config import config, AppConfig
+from diagnostics import DiagnosticOptions, DiagnosticContext, capture_on_failure
 from actions.apply import apply_to_job
 from core.database import get_enriched_jobs, get_error_jobs, update_job_status
 from llm.vacancy_filter import is_vacancy_suitable
@@ -137,19 +138,88 @@ async def _process_single_job(
         update_job_status(job_id, "applied", app_config.session.db_conn)
         logger.info(f"Successfully processed application for {title}.")
         return True
-    except TimeoutError:
+    except TimeoutError as e:
         logger.error(f"Timeout error processing job ID {job_id}. Skipping.")
+        await capture_on_failure(
+            context,
+            page,
+            DiagnosticOptions(
+                enable_on_failure=app_config.diagnostics.enable_on_failure,
+                capture_screenshot=app_config.diagnostics.capture_screenshot,
+                capture_html=app_config.diagnostics.capture_html,
+                capture_console_log=app_config.diagnostics.capture_console_log,
+                capture_har=app_config.diagnostics.capture_har,
+                capture_trace=app_config.diagnostics.capture_trace,
+                output_dir=app_config.diagnostics.output_dir,
+                max_artifacts_per_run=app_config.diagnostics.max_artifacts_per_run,
+                pii_mask_patterns=app_config.diagnostics.pii_mask_patterns,
+                phases_enabled=app_config.diagnostics.phases_enabled,
+            ),
+            DiagnosticContext(
+                phase="processing",
+                job_id=job_id,
+                link=full_url,
+                error=e,
+                tracker_state={},
+            ),
+        )
         update_job_status(job_id, "error", app_config.session.db_conn)
         return False
     except FormFillError as exc:
         logger.error(
             "Form filling failed for job ID %s: %s", job_id, exc, exc_info=True
         )
+        await capture_on_failure(
+            context,
+            page,
+            DiagnosticOptions(
+                enable_on_failure=app_config.diagnostics.enable_on_failure,
+                capture_screenshot=app_config.diagnostics.capture_screenshot,
+                capture_html=app_config.diagnostics.capture_html,
+                capture_console_log=app_config.diagnostics.capture_console_log,
+                capture_har=app_config.diagnostics.capture_har,
+                capture_trace=app_config.diagnostics.capture_trace,
+                output_dir=app_config.diagnostics.output_dir,
+                max_artifacts_per_run=app_config.diagnostics.max_artifacts_per_run,
+                pii_mask_patterns=app_config.diagnostics.pii_mask_patterns,
+                phases_enabled=app_config.diagnostics.phases_enabled,
+            ),
+            DiagnosticContext(
+                phase="processing",
+                job_id=job_id,
+                link=full_url,
+                error=exc,
+                tracker_state={},
+            ),
+        )
         update_job_status(job_id, "error", app_config.session.db_conn)
         return False
     except Exception as e:
         logger.error(
             f"An unexpected error occurred while processing job ID {job_id}: {e}"
+        )
+        await capture_on_failure(
+            context,
+            page,
+            DiagnosticOptions(
+                enable_on_failure=app_config.diagnostics.enable_on_failure,
+                capture_screenshot=app_config.diagnostics.capture_screenshot,
+                capture_html=app_config.diagnostics.capture_html,
+                capture_console_log=app_config.diagnostics.capture_console_log,
+                capture_har=app_config.diagnostics.capture_har,
+                capture_trace=app_config.diagnostics.capture_trace,
+                output_dir=app_config.diagnostics.output_dir,
+                max_artifacts_per_run=app_config.diagnostics.max_artifacts_per_run,
+                pii_mask_patterns=app_config.diagnostics.pii_mask_patterns,
+                phases_enabled=app_config.diagnostics.phases_enabled,
+            ),
+            DiagnosticContext(
+                phase="processing",
+                job_id=job_id,
+                link=full_url,
+                error=e,
+                tracker_state={},
+            ),
         )
         update_job_status(job_id, "error", app_config.session.db_conn)
         return False

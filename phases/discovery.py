@@ -2,6 +2,7 @@ import logging
 from playwright.async_api import BrowserContext
 
 from config import AppConfig
+from diagnostics import DiagnosticOptions, DiagnosticContext, capture_on_failure
 from actions.fetch_jobs import fetch_job_links_user
 
 logger = logging.getLogger(__name__)
@@ -93,11 +94,37 @@ async def run_discovery_phase(app_config: AppConfig, browser_context: BrowserCon
 
     page = browser_context.pages[0] if browser_context.pages else await browser_context.new_page()
 
-    discovered_jobs_data = await fetch_job_links_user(
-        page=page,
-        app_config=app_config,
-        db_conn=app_config.session.db_conn,
-    )
+    try:
+        discovered_jobs_data = await fetch_job_links_user(
+            page=page,
+            app_config=app_config,
+            db_conn=app_config.session.db_conn,
+        )
+    except Exception as e:  # noqa: BLE001
+        await capture_on_failure(
+            browser_context,
+            page,
+            DiagnosticOptions(
+                enable_on_failure=app_config.diagnostics.enable_on_failure,
+                capture_screenshot=app_config.diagnostics.capture_screenshot,
+                capture_html=app_config.diagnostics.capture_html,
+                capture_console_log=app_config.diagnostics.capture_console_log,
+                capture_har=app_config.diagnostics.capture_har,
+                capture_trace=app_config.diagnostics.capture_trace,
+                output_dir=app_config.diagnostics.output_dir,
+                max_artifacts_per_run=app_config.diagnostics.max_artifacts_per_run,
+                pii_mask_patterns=app_config.diagnostics.pii_mask_patterns,
+                phases_enabled=app_config.diagnostics.phases_enabled,
+            ),
+            DiagnosticContext(
+                phase="discovery",
+                job_id=None,
+                link=None,
+                error=e,
+                tracker_state={},
+            ),
+        )
+        raise
     # Note: discovered jobs are already saved inside fetch_job_links_user
     logger.info(f"Discovery phase completed. Found {len(discovered_jobs_data)} new jobs.")
     logger.info("--- Finished Discovery Phase ---")
