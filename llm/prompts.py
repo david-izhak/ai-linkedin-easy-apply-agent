@@ -177,6 +177,12 @@ Your entire response MUST be a single JSON object matching the structure below. 
 - **Tone:** Professional, confident, and concise.
 - **Length:** The total word count for all paragraphs combined should be between 320 and 420 words.
 - **P.S.:** Only add content to the `ps` field if the `include_ps` flag is `true`. Otherwise, it must be `null`.
+
+**IV. Language Skills Guidelines (CRITICAL):**
+- **Hebrew:** Do NOT mention Hebrew language proficiency or level in the cover letter, even if Hebrew is required in the job description or mentioned in the resume.
+- **English:** Always mention that the candidate has professional-level English proficiency. This should be included naturally in one of the paragraphs when discussing communication skills or qualifications.
+- **Russian:** Always mention that the candidate has native-level Russian proficiency. This should be included naturally when discussing language skills or qualifications.
+- **Other Languages:** Only mention other languages if they are explicitly required in the job description and are clearly mentioned in the resume with a strong proficiency level.
 """
 
 
