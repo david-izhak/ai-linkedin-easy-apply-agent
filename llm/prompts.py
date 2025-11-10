@@ -58,14 +58,44 @@ raw = REQ_WEIGHT*req_sub + OPT_WEIGHT*opt_sub + EXP_WEIGHT*exp_sub + EDU_WEIGHT*
 match_percentage = round_half_up(100 * raw). Clamp to [0,100].
 round_half_up rule: fractions of 0.5 round away from zero (e.g., 84.5 → 85).
 
-9) ANALYSIS STRING (deterministic format)
-- At most 2 short sentences, ≤300 characters total.
-- Sentence 1: "Required: X/Y matched; missing: [names alphabetically or 'none']."
-- Sentence 2: "Optional: U/V matched; Exp: cand {{C}}y vs req {{R}}y; Seniority: cand {{CL}} vs req {{RL}}."
-- Use "n/a" when a value is not available.
+9) OUTPUT (STRICT JSON, deterministic)
+- Return a single JSON object exactly matching the schema below. No extra commentary.
+{{
+  "match_percentage": <integer 0..100>,
+  "analysis": "Required: X/Y matched; Optional: U/V matched; Exp: cand {C}y vs req {R}y; Seniority: cand {CL} vs req {RL}.",
+  "required": {
+    "total": <integer Y>,
+    "matched_count": <integer X>,
+    "missing_count": <integer Y - X>,
+    "matched": ["<skill1>", "<skill2>", ...],   // normalized, unique, alphabetically sorted
+    "missing": ["<skill1>", "<skill2>", ...]    // normalized, unique, alphabetically sorted
+  },
+  "optional": {
+    "total": <integer V>,
+    "matched_count": <integer U>,
+    "missing_count": <integer V - U>,
+    "matched": ["<skill1>", "<skill2>", ...],   // normalized, unique, alphabetically sorted
+    "missing": ["<skill1>", "<skill2>", ...]    // normalized, unique, alphabetically sorted
+  },
+  "experience": {
+    "required_years": <integer or null>,
+    "candidate_years": <integer or null>,
+    "required_seniority": "<one of: intern|junior|middle|senior|lead|principal|staff|architect or null>",
+    "candidate_seniority": "<one of: intern|junior|middle|senior|lead|principal|staff|architect or null>"
+  }
+}}
+- Consistency requirements (CRITICAL):
+  - required.total == len(required.matched) + len(required.missing)
+  - required.matched_count == len(required.matched)
+  - required.missing_count == len(required.missing)
+  - optional.total == len(optional.matched) + len(optional.missing)
+  - optional.matched_count == len(optional.matched)
+  - optional.missing_count == len(optional.missing)
+  - All lists deduplicated and alphabetically sorted.
+  - Use normalized/canonicalized skill tokens for list entries.
 
 FAILURE HANDLING
-- If either input is empty or non-informative, calculate a match_percentage of 0 and use the analysis "Insufficient input to compute a deterministic score."
+- If either input is empty or non-informative, set match_percentage to 0, analysis to "Insufficient input to compute a deterministic score.", and return empty arrays with zero counts for required/optional and nulls for experience.
 
 Based on the algorithm, perform the scoring now."""
 
