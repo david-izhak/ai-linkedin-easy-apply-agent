@@ -32,15 +32,6 @@ def ask_user(prompt: str) -> str:
 #     time.sleep(time_ms / 1000.0)
 
 
-def make_search_key(params: dict) -> str:
-    """
-    Builds a deterministic search key (SHA256) from search parameters by
-    producing a sorted JSON string to ensure stable hashing regardless of key order.
-    """
-    normalized = json.dumps(params, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
-
-
 async def wait_for_any_selector(
     page: Page,
     selectors: list[str],

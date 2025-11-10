@@ -46,18 +46,6 @@ def init_db(conn: sqlite3.Connection):
         )
     """
     )
-    # Discovery state table
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS discovery_state (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          search_key TEXT NOT NULL UNIQUE,
-          last_seen_max_job_id INTEGER,
-          last_complete_sweep_before_id INTEGER,
-          updated_at TIMESTAMP NOT NULL
-        );
-    """
-    )
     # Run history table
     cursor.execute(
         """
@@ -300,46 +288,6 @@ def get_vacancy_by_id(vacancy_id: int, conn: sqlite3.Connection) -> dict | None:
     if vacancy:
         return dict(vacancy)
     return None
-
-
-# --- Discovery state helpers ---
-
-def get_discovery_state(search_key: str, conn: sqlite3.Connection) -> dict | None:
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM discovery_state WHERE search_key = ?",
-        (search_key,),
-    )
-    row = cursor.fetchone()
-    return dict(row) if row else None
-
-
-def upsert_discovery_state(
-    search_key: str,
-    last_seen_max_job_id: int | None,
-    last_complete_sweep_before_id: int | None,
-    conn: sqlite3.Connection,
-):
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO discovery_state (search_key, last_seen_max_job_id, last_complete_sweep_before_id, updated_at)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(search_key) DO UPDATE SET
-          last_seen_max_job_id = MAX(discovery_state.last_seen_max_job_id, COALESCE(?, discovery_state.last_seen_max_job_id)),
-          last_complete_sweep_before_id = COALESCE(?, discovery_state.last_complete_sweep_before_id),
-          updated_at = CURRENT_TIMESTAMP
-        """,
-        (
-            search_key,
-            last_seen_max_job_id,
-            last_complete_sweep_before_id,
-            last_seen_max_job_id,
-            last_complete_sweep_before_id,
-        ),
-    )
-    conn.commit()
 
 
 def get_existing_vacancy_ids(

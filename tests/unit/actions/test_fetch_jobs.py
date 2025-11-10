@@ -161,10 +161,8 @@ class TestScrapePageForLinks:
 class TestFetchJobLinksUser:
 
     @pytest.mark.asyncio
-    @patch("actions.fetch_jobs.database.upsert_discovery_state")
     @patch("actions.fetch_jobs.database.save_discovered_jobs")
     @patch("actions.fetch_jobs.database.get_existing_vacancy_ids")
-    @patch("actions.fetch_jobs.database.get_discovery_state")
     @patch("actions.fetch_jobs._get_total_job_count")
     @patch("actions.fetch_jobs._extract_job_data_from_page")
     @patch("actions.fetch_jobs.fetch_job_links_limit")
@@ -173,10 +171,8 @@ class TestFetchJobLinksUser:
         mock_fetch_job_links_limit,
         mock_extract_job_data_from_page,
         mock_get_total_job_count,
-        mock_get_discovery_state,
         mock_get_existing_vacancy_ids,
         mock_save_discovered_jobs,
-        mock_upsert_discovery_state,
         app_config,
     ):
         """Test successful fetching of job links with JOB_TITLE filtering."""
@@ -237,15 +233,12 @@ class TestFetchJobLinksUser:
         assert result[0][0] == 1  # job_id
         assert result[1][0] == 3
         mock_save_discovered_jobs.assert_called_once()
-        mock_upsert_discovery_state.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("actions.fetch_jobs.database.get_discovery_state", return_value=None)
     @patch("actions.fetch_jobs._get_total_job_count")
     async def test_fetch_job_links_user_no_jobs(
         self,
         mock_get_total_job_count: MagicMock,
-        mock_get_discovery_state: MagicMock,
         app_config: AppConfig,
         mocker: MockerFixture,
     ):
@@ -264,7 +257,6 @@ class TestFetchJobLinksUser:
         mock_get_total_job_count.assert_called_once()
         assert result == []
         mock_page.goto.assert_called_once()
-        mock_get_discovery_state.assert_called_once()
 
 
 class TestScrapeJobPageDetails:

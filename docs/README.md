@@ -32,7 +32,7 @@
 ### База данных
 
 **[Схема базы данных](database-schema.md)**  
-Структура SQLite БД: таблицы `vacancies`, `run_history`, `discovery_state`. Жизненный цикл статусов вакансий, поля и их назначение.
+Структура SQLite БД: таблицы `vacancies`, `run_history`. Жизненный цикл статусов вакансий, поля и их назначение.
 
 ### LLM и AI
 
@@ -74,7 +74,7 @@
 
 - [План документации](archive/documentation_plan.md)
 - [План discovery watermark](archive/watermark_discovery_plan.md)
-- [Состояние discovery](archive/discovery_state.md)
+- [Состояние discovery](archive/discovery_state.md) — deprecated
 
 ---
 
@@ -123,7 +123,7 @@ docs/
 └── archive/                           # Архивные документы
     ├── documentation_plan.md
     ├── watermark_discovery_plan.md
-    └── discovery_state.md
+    └── discovery_state.md (deprecated)
 ```
 
 ---

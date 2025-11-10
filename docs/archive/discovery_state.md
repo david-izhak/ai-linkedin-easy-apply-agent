@@ -1,14 +1,14 @@
 # Discovery State: Маркеры прогресса дискавери
 
 ## Назначение
-`discovery_state` хранит устойчивые маркеры прогресса для процесса сбора вакансий (дискавери) при установленном лимите. Цель — исключить потери вакансий за счёт:
+[deprecated] `discovery_state` ранее хранил устойчивые маркеры прогресса для процесса сбора вакансий (дискавери) при установленном лимите. Цель — исключить потери вакансий за счёт:
 - детерминированного ключа поиска `search_key` для каждого набора фильтров;
 - монотонного high‑water mark `last_seen_max_job_id` для «новых сверху»;
 - порога «добора хвоста» `last_complete_sweep_before_id` для систематического прохода вниз при многократных запусках.
 
 ## Схема таблицы
 ```
-CREATE TABLE IF NOT EXISTS discovery_state (
+[deprecated] CREATE TABLE IF NOT EXISTS discovery_state (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   search_key TEXT NOT NULL UNIQUE,
   last_seen_max_job_id INTEGER,
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS discovery_state (
 
 ## Псевдокод обновления маркеров (UPSERT)
 ```
-INSERT INTO discovery_state (search_key, last_seen_max_job_id, last_complete_sweep_before_id, updated_at)
+[deprecated] INSERT INTO discovery_state (search_key, last_seen_max_job_id, last_complete_sweep_before_id, updated_at)
 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(search_key) DO UPDATE SET
   last_seen_max_job_id = MAX(discovery_state.last_seen_max_job_id, excluded.last_seen_max_job_id),
@@ -51,8 +51,8 @@ ON CONFLICT(search_key) DO UPDATE SET
 ```
 
 ## Инварианты
-- `last_seen_max_job_id` — монотонно не убывает.
-- `last_complete_sweep_before_id` — отражает самую глубокую достигнутую нижнюю границу просмотра за последний запуск; может сдвигаться «вниз» (к меньшим id) по мере пролистывания.
+- [deprecated] `last_seen_max_job_id` — монотонно не убывает.
+- [deprecated] `last_complete_sweep_before_id` — отражает самую глубокую достигнутую нижнюю границу просмотра за последний запуск; может сдвигаться «вниз» (к меньшим id) по мере пролистывания.
 - Дедупликация обеспечивается `vacancies.id PRIMARY KEY` и/или предварительной проверкой существования.
 
 ## Почему вакансии не теряются

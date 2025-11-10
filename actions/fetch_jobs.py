@@ -4,7 +4,6 @@ import logging
 from urllib.parse import urlencode
 from core.selectors import selectors
 from core.utils import (
-    make_search_key,
     wait_for_any_selector,
     construct_full_url,
 )
@@ -210,15 +209,6 @@ async def fetch_job_links_user(
         "sortBy": app_config.job_search.sort_by,
     }
     initial_url = f"{base_url}?{urlencode(initial_params)}&start=0"
-
-    # Build deterministic search key for discovery state
-    search_key = make_search_key(initial_params)
-    state = database.get_discovery_state(search_key, db_conn)
-    if state:
-        logger.info(
-            f"Loaded discovery state for key={search_key[:8]}... max_id={state.get('last_seen_max_job_id')} sweep_before={state.get('last_complete_sweep_before_id')}"
-        )
-
     logger.info(f"Navigating to initial search URL: {initial_url}")
     await page.goto(initial_url, wait_until="load")
 
@@ -227,7 +217,6 @@ async def fetch_job_links_user(
         return []
 
     unseen_collected = []
-    observed_ids_this_run: list[int] = []
 
     if max_jobs_to_fetch and max_jobs_to_fetch < num_available_jobs:
         logger.info(
@@ -269,9 +258,6 @@ async def fetch_job_links_user(
         if not page_results:
             logger.warning("Scraping returned no results for a page, breaking loop.")
             break
-
-        # Track observed ids for watermark sweep boundary
-        observed_ids_this_run.extend([jid for jid, *_ in page_results])
 
         # Filter out already existing vacancies to accumulate only unseen
         candidate_ids = [jid for jid, *_ in page_results]
@@ -322,24 +308,9 @@ async def fetch_job_links_user(
     if unseen_collected:
         database.save_discovered_jobs(unseen_collected, db_conn)
 
-    # Update discovery state watermarks
-    last_seen_max_job_id = None
-    if unseen_collected:
-        last_seen_max_job_id = max(job[0] for job in unseen_collected)
-    last_complete_sweep_before_id = None
-    if observed_ids_this_run:
-        last_complete_sweep_before_id = min(observed_ids_this_run)
-
-    database.upsert_discovery_state(
-        search_key=search_key,
-        last_seen_max_job_id=last_seen_max_job_id,
-        last_complete_sweep_before_id=last_complete_sweep_before_id,
-        conn=db_conn,
-    )
-
     unique_jobs = list({job[0]: job for job in unseen_collected}.values())
     logger.info(
-        f"Extracted {len(unique_jobs)} unique new job links in total (observed ids this run: {len(observed_ids_this_run)})."
+        f"Extracted {len(unique_jobs)} unique new job links in total."
     )
     return unique_jobs
 

@@ -1,9 +1,9 @@
 # Поэтапный план внедрения “watermark”-сборщика с лимитом без потерь
 
-## Этап 1. Расширение схемы БД: discovery_state
+## [deprecated] Этап 1. Расширение схемы БД: discovery_state
 - **Описание**: Добавить таблицу состояния дискавери для хранения маркеров прогресса по каждому уникальному запросу.
 - **Задачи**:
-  - Создать таблицу `discovery_state(search_key UNIQUE, last_seen_max_job_id, last_complete_sweep_before_id, updated_at)`.
+  - [deprecated] Создать таблицу `discovery_state(search_key UNIQUE, last_seen_max_job_id, last_complete_sweep_before_id, updated_at)`.
   - Реализовать CRUD: чтение по `search_key`, UPSERT с монотонным `last_seen_max_job_id`.
 - **Ресурсы и инструменты**:
   - Файл: `core/database.py`, SQLite (`sqlite3`), функция `setup_database()`.
@@ -24,7 +24,7 @@
 ## Этап 3. Цикл дискавери: набирать именно L unseen
 - **Описание**: Продолжать пагинацию, пока не наберём лимит новых для БД вакансий.
 - **Задачи**:
-  - В `fetch_job_links_user`: загрузить `discovery_state` по `search_key`.
+  - [deprecated] В `fetch_job_links_user`: загрузить `discovery_state` по `search_key`.
   - На каждой странице собирать `(job_id, link, title, company)`.
   - Исключать уже существующие id (предварительно или полагаясь на `INSERT OR IGNORE`).
   - Накопить `unseen` до L или до исчерпания выдачи.
@@ -50,7 +50,7 @@
 - **Задачи**:
   - Unit: сценарий с 90% дублей на первых страницах, лимит L=10 → добираем ровно 10 unseen.
   - Unit: проверка монотонности `last_seen_max_job_id` и корректности `last_complete_sweep_before_id`.
-  - Integration: CRUD `discovery_state`, идемпотентные вставки в `vacancies`, продвижение маркеров.
+  - [deprecated] Integration: CRUD `discovery_state`, идемпотентные вставки в `vacancies`, продвижение маркеров.
 - **Ресурсы и инструменты**:
   - Файлы: `tests/unit/actions/test_discovery_watermark.py`, `tests/integration/test_discovery_state_flow.py`.
   - Pytest, моки Playwright (для unit).
@@ -60,7 +60,7 @@
 ## Этап 6. Миграция/инициализация
 - **Описание**: Идёмпотентное создание таблицы на существующих развёртываниях.
 - **Задачи**:
-  - Добавить DDL `discovery_state` в `setup_database()`.
+  - [deprecated] Добавить DDL `discovery_state` в `setup_database()`.
   - Проверить первый запуск на уже существующей БД.
 - **Ресурсы и инструменты**:
   - Файл: `core/database.py`.
@@ -71,7 +71,7 @@
 - **Описание**: Объяснить схему и поведение лимита.
 - **Задачи**:
   - Обновить гайды (`QUICK_START_GUIDE.md`, `docs/6_configuration_and_run.md`) — поведение лимита и watermark.
-  - Добавить/уточнить `docs/discovery_state.md` (схема, инварианты, UPSERT, логирование).
+  - [deprecated] Добавить/уточнить `docs/discovery_state.md` (схема, инварианты, UPSERT, логирование).
 - **Ресурсы и инструменты**:
   - Файлы: `docs/discovery_state.md`, `QUICK_START_GUIDE.md`.
 - **Результаты**:
