@@ -251,33 +251,15 @@ POLICY:
 - Set confidence to a float between 0.0 (total guess) and 1.0 (certain).
 - If confidence is low (< 0.8), make an optimistic guess. For questions about willingness, agreement, or for boolean/checkbox fields, always choose the affirmative/positive option (e.g., "Yes", "Agree", check the box).
 
-**IMPORTANT:** ALWAYS provide a suggest_rule with:
-  - q_pattern: regex pattern to match this field (e.g., "(python|питон)" for Python skill)
-  - strategy: how to fill this field in the future
-    - For boolean/checkbox fields: use "literal" strategy with value true/false
-    - For text fields: use "profile_key" strategy with a profile key
-    - For combobox fields (autocomplete): use "profile_key" strategy to provide the full text value
-    - For select fields (with available options): use "one_of_options" strategy
-
 OUTPUT FORMAT:
 {
   "decision": "select|text|number|check|skip",
   "value": <appropriate value>,
   "confidence": <0.0-1.0>,
-  "suggest_rule": {
-    "q_pattern": "<regex or keywords to match this field>",
-    "strategy": {
-      "kind": "literal|profile_key|one_of_options|numeric_from_profile",
-      "params": {<strategy-specific params>}
-    }
-  }
+  "suggest_rule": null
 }
 
-EXAMPLES OF suggest_rule:
-1. Checkbox "Python": {"q_pattern": "(python|питон)", "strategy": {"kind": "literal", "params": {"value": true}}}
-2. Checkbox "Java": {"q_pattern": "(java)", "strategy": {"kind": "literal", "params": {"value": true}}}
-3. Radio "Yes/No": {"q_pattern": "(willing to relocate|готовность к переезду)", "strategy": {"kind": "one_of_options", "params": {"preferred": ["Yes", "Да"]}}}
-4. Combobox "Location (city)": {"q_pattern": "(location.*city|город)", "strategy": {"kind": "profile_key", "params": {"key": "address.full_city"}}}
+NOTE: Rule generation is handled separately after the decision is made. Leave suggest_rule as null.
 
 **SPECIAL CASE - Combobox/Autocomplete Fields:**
 When field_type is "combobox" (autocomplete with dynamic options), provide the FULL, COMPLETE value that should appear in the dropdown.
@@ -285,3 +267,168 @@ For example, for "Location (city)" with candidate in "Rishon LeZion", provide th
 This value will be used to search in the dynamic dropdown list.
 
 TEMPERATURE: 0 (deterministic output required)"""
+
+
+RULE_GENERATION_PROMPT = """ROLE: Rule Generation Engine
+
+Your task is to generate a reusable rule for form field filling based on the provided context.
+
+TASK:
+Generate a rule that can be used to automatically fill similar fields in the future.
+
+RULE STRUCTURE:
+The rule must contain:
+1. q_pattern: A regex pattern that matches the question text (case-insensitive)
+   - Should capture key phrases/words that identify this field type
+   - Examples: "(python|питон)" for Python skill checkbox, "(visa|work authorization)" for visa questions
+   - Use named capture groups if you need to extract dynamic values (e.g., skill name)
+   - Pattern should be specific enough to match this field type but general enough to work for similar questions
+   - For multilingual support, include both English and Russian variants in the pattern
+
+2. strategy: Defines how to fill the field
+   - kind: One of: "literal", "profile_key", "numeric_from_profile", "one_of_options", "one_of_options_from_profile", "salary_by_currency"
+   - params: Strategy-specific parameters
+
+STRATEGY SELECTION GUIDE:
+
+- Checkbox fields (boolean):
+  Use "literal" strategy with value: true/false
+  Example: {"kind": "literal", "params": {"value": true}}
+  REQUIRED: "value" must be present in params
+
+- Text fields with profile data:
+  Use "profile_key" strategy with appropriate key from candidate profile
+  Example: {"kind": "profile_key", "params": {"key": "address.city"}}
+  Common keys: address.city, address.country, phone, email, links.github, links.linkedin, personal.firstName, personal.lastName
+  REQUIRED: "key" must be present in params and must be a valid profile key path
+
+- Number fields with profile data:
+  Use "numeric_from_profile" strategy with key path
+  Example: {"kind": "numeric_from_profile", "params": {"key": "years_experience.python"}}
+  For dynamic skill extraction, use named capture groups: {"kind": "numeric_from_profile", "params": {"key": "years_experience.{skill}"}}
+  REQUIRED: "key" must be present in params and must point to a numeric field in the profile (e.g., "years_experience.python")
+
+- Radio/Select fields with fixed options:
+  Use "one_of_options" strategy with preferred option OR synonyms
+  Example 1 (simple): {"kind": "one_of_options", "params": {"preferred": ["Yes", "Да"]}}
+  Example 2 (with synonyms): {"kind": "one_of_options", "params": {"synonyms": {"Yes": ["Yes", "Да", "yes"], "No": ["No", "Нет", "no"]}}}
+  REQUIRED: Either "preferred" (list of preferred options) OR "synonyms" (map of canonical values to synonyms) must be present in params
+  NOTE: "preferred" is a list of option values that should be selected. "synonyms" is a map for matching options with variations.
+
+- Radio/Select fields with profile-based selection:
+  Use "one_of_options_from_profile" strategy with profile key and synonyms
+  Example 1 (language): {"kind": "one_of_options_from_profile", "params": {"key": "languages[0].language", "synonyms": {"English": ["English", "английский"], "Hebrew": ["Hebrew", "иврит"], "Russian": ["Russian", "русский"]}}}
+  Example 2 (work authorization): {"kind": "one_of_options_from_profile", "params": {"key": "work_authorization.US", "synonyms": {"yes": ["Yes", "Да", "U.S. Citizen"], "no": ["No", "Нет"], "need_visa": ["Need Visa", "Требуется виза"]}}}
+  Example 3 (gender): {"kind": "one_of_options_from_profile", "params": {"key": "equalOpportunity.gender", "synonyms": {"Male": ["Male", "Мужской"], "Female": ["Female", "Женский"], "Decline": ["Decline", "Prefer not to say", "Не указывать"]}}}
+  REQUIRED: "key" must be present in params and must point to a field in the profile
+  RECOMMENDED: "synonyms" should be present to map profile values to form options. If omitted, the system will try to match the profile value directly.
+
+- Salary fields:
+  Use "salary_by_currency" strategy
+  Example: {"kind": "salary_by_currency", "params": {"base_key_template": "salary_expectation.monthly_net_{currency}", "default_currency": "nis"}}
+  REQUIRED: Both "base_key_template" and "default_currency" must be present in params
+
+EXAMPLES:
+
+1. Checkbox "Python":
+   q_pattern: "(python|питон)"
+   strategy: {"kind": "literal", "params": {"value": true}}
+   NOTE: "value" is REQUIRED
+
+2. Text field "Location (city)":
+   q_pattern: "(location.*city|city|город)"
+   strategy: {"kind": "profile_key", "params": {"key": "address.city"}}
+   NOTE: "key" is REQUIRED and must be a valid profile path
+
+3. Number field "Years of experience with Python":
+   q_pattern: "(years? of experience.*python|опыт.*python)"
+   strategy: {"kind": "numeric_from_profile", "params": {"key": "years_experience.python"}}
+   NOTE: "key" is REQUIRED and must point to a numeric field in profile.years_experience
+
+4. Number field with dynamic skill extraction:
+   q_pattern: "(?P<skill>python|java|javascript).*years? of experience"
+   strategy: {"kind": "numeric_from_profile", "params": {"key": "years_experience.{skill}"}}
+   NOTE: Use named capture groups in pattern and reference them in key with {group_name}
+
+5. Radio "Willing to relocate" (simple Yes/No):
+   q_pattern: "(relocate|willing to relocate|готовность к переезду)"
+   strategy: {"kind": "one_of_options", "params": {"preferred": ["Yes", "Да"]}}
+   NOTE: "preferred" is a list of option values to select from
+
+6. Radio "Willing to relocate" (with synonyms):
+   q_pattern: "(relocate|willing to relocate|готовность к переезду)"
+   strategy: {"kind": "one_of_options", "params": {"synonyms": {"Yes": ["Yes", "Да", "Willing"], "No": ["No", "Нет", "Not willing"]}}}
+   NOTE: "synonyms" maps canonical values to lists of possible option variations
+
+7. Select "Native language speaker" (profile-based):
+   q_pattern: "(native|родной).*?(?P<language>hebrew|иврит|english|английский|russian|русский).*?speaker"
+   strategy: {"kind": "one_of_options_from_profile", "params": {"key": "languages[0].language", "synonyms": {"English": ["English", "английский"], "Hebrew": ["Hebrew", "иврит"], "Russian": ["Russian", "русский"]}}}
+   NOTE: "key" is REQUIRED (points to profile field), "synonyms" is RECOMMENDED (maps profile values to form options)
+
+8. Select "Gender" (profile-based):
+   q_pattern: "(gender|how do you identify|пол)"
+   strategy: {"kind": "one_of_options_from_profile", "params": {"key": "equalOpportunity.gender", "synonyms": {"Male": ["Male", "Мужской"], "Female": ["Female", "Женский"], "Decline": ["Decline", "Prefer not to say", "Не указывать"]}}}
+   NOTE: Check the candidate profile for the actual field structure and values
+
+9. Combobox "Location (city)":
+   q_pattern: "(location.*city|city|город)"
+   strategy: {"kind": "profile_key", "params": {"key": "address.city"}}
+
+10. Select "Email":
+    q_pattern: "(email|e-mail|электронная почта)"
+    strategy: {"kind": "profile_key", "params": {"key": "email"}}
+
+11. Text field "Phone":
+    q_pattern: "(phone|телефон)"
+    strategy: {"kind": "profile_key", "params": {"key": "phone"}}
+
+OUTPUT FORMAT:
+Return a JSON object with the following structure:
+{
+  "q_pattern": "<regex pattern>",
+  "strategy": {
+    "kind": "<strategy_kind>",
+    "params": {<strategy_params>}
+  },
+  "confidence": <0.0-1.0>
+}
+
+CRITICAL REQUIREMENTS:
+1. The "strategy" field MUST be a complete object with both "kind" and "params" fields.
+2. The "kind" field MUST be one of the valid strategy kinds: "literal", "profile_key", "numeric_from_profile", "one_of_options", "one_of_options_from_profile", "salary_by_currency"
+3. The "params" field MUST be a dictionary (object) with strategy-specific parameters.
+4. DO NOT return an empty "strategy": {} object. Always provide a complete strategy definition.
+5. DO NOT return empty "params": {} for strategies that require parameters. Always fill in the required params.
+
+REQUIRED PARAMS BY STRATEGY KIND:
+- "literal": MUST have "value" (boolean or string)
+- "profile_key": MUST have "key" (string, profile field path)
+- "numeric_from_profile": MUST have "key" (string, profile field path to numeric value)
+- "one_of_options": MUST have either "preferred" (list of strings) OR "synonyms" (map of strings to lists)
+- "one_of_options_from_profile": MUST have "key" (string, profile field path), SHOULD have "synonyms" (map)
+- "salary_by_currency": MUST have "base_key_template" (string) and "default_currency" (string)
+
+VALIDATION RULES:
+- If strategy kind is "one_of_options" and params is empty or missing "preferred"/"synonyms", the rule will be REJECTED
+- If strategy kind is "numeric_from_profile" and params is empty or missing "key", the rule will be REJECTED
+- If strategy kind is "one_of_options_from_profile" and params is empty or missing "key", the rule will be REJECTED
+- If strategy kind is "profile_key" and params is empty or missing "key", the rule will be REJECTED
+
+STRATEGY FIELD REQUIREMENTS (QUICK REFERENCE):
+- For checkbox fields: {"kind": "literal", "params": {"value": true/false}}
+- For text fields: {"kind": "profile_key", "params": {"key": "email"}}
+- For number fields: {"kind": "numeric_from_profile", "params": {"key": "years_experience.python"}}
+- For radio/select fields (simple): {"kind": "one_of_options", "params": {"preferred": ["Yes", "Да"]}}
+- For radio/select fields (with synonyms): {"kind": "one_of_options", "params": {"synonyms": {"Yes": ["Yes", "Да"], "No": ["No", "Нет"]}}}
+- For radio/select fields (profile-based): {"kind": "one_of_options_from_profile", "params": {"key": "languages[0].language", "synonyms": {"English": ["English"], "Hebrew": ["Hebrew"]}}}
+
+IMPORTANT:
+- The q_pattern should be specific enough to match this field type but general enough to work for similar questions
+- Use case-insensitive matching (regex flags are handled by the system)
+- For multilingual support, include both English and Russian variants in the pattern
+- Confidence should reflect how confident you are that this rule will work for similar fields
+- Minimum confidence for rule acceptance is 0.85
+- Patterns should be between 3 and 200 characters
+- Avoid overly generic patterns like ".*" or ".*.*"
+- Use named capture groups for dynamic value extraction when appropriate
+- ALWAYS provide a complete strategy object with both "kind" and "params" fields. Never return an empty strategy object."""

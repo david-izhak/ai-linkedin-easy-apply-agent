@@ -174,6 +174,32 @@ class RuleSuggestionValidator:
         if params is not None and not isinstance(params, dict):
             return False, "strategy.params must be a dictionary"
         
+        # Validate that required params are present for each strategy kind
+        if strategy_kind == "literal":
+            if not params or "value" not in params:
+                return False, "Strategy 'literal' requires 'value' in params"
+        
+        elif strategy_kind == "profile_key":
+            if not params or "key" not in params or not params.get("key"):
+                return False, "Strategy 'profile_key' requires 'key' in params"
+        
+        elif strategy_kind == "numeric_from_profile":
+            if not params or "key" not in params or not params.get("key"):
+                return False, "Strategy 'numeric_from_profile' requires 'key' in params"
+        
+        elif strategy_kind == "one_of_options":
+            if not params or ("preferred" not in params and "synonyms" not in params):
+                return False, "Strategy 'one_of_options' requires either 'preferred' or 'synonyms' in params"
+        
+        elif strategy_kind == "one_of_options_from_profile":
+            if not params or "key" not in params or not params.get("key"):
+                return False, "Strategy 'one_of_options_from_profile' requires 'key' in params"
+            # synonyms is optional but recommended
+        
+        elif strategy_kind == "salary_by_currency":
+            if not params or "base_key_template" not in params or "default_currency" not in params:
+                return False, "Strategy 'salary_by_currency' requires 'base_key_template' and 'default_currency' in params"
+        
         return True, ""
     
     def validate_batch(

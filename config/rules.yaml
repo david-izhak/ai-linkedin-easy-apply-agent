@@ -1,684 +1,719 @@
-schema_version: '1.0'
 rules:
-  - id: rule_001
-    scope:
-      site: '*'
-      form_kind: job_apply
-      locale:
-        - en
-        - ru
-    signature:
-      field_type: radio
-      q_pattern: "(visa|work authorization|разрешение на работу|legal authorization)"
-      options_fingerprint: null
-    strategy:
-      kind: one_of_options
-      params:
-        synonyms:
-          "Yes":
-            - "yes"
-            - да
-            - authorized
-            - i am authorized
-          "No":
-            - "no"
-            - нет
-    constraints:
-      required: true
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-01-27T00:00:00Z'
-      last_seen: null
-      hits: 0
-  - id:
-    scope:
-      site: "*"
-      form_kind: "job_apply"
-      locale: [ "en", "ru" ]
-    signature:
-      field_type: "number"
-      # q_pattern will match phrases asking for years for a specific skill and
-      # capture the skill name into the named group 'skill'. The actual list
-      # of alternatives was built from config/profile_example.json keys.
-      q_pattern: "(?P<skill>ai_workflows|ai|architecture|artifactory|authentication|aws|azure|bash|bitbucket|bucket4j|business_needs_translation|captcha|cassandra|chrome_devtools|ci_cd|cursor|data_integration|data_platforms|databricks|docker|docker_compose|dynamodb|elasticsearch|feign_client|firebase|founders_interaction|gcp|github|gitlab|google_maps_api|gradle|grafana|grpc|h2|hibernate|html|java|jenkins|jdbc|jira|json|jsoup|junit|kafka|kafka_streams|kibana|kube_forwarder|kubernetes|langchain|llm|llm_based_workflows|llms|lombok|maven|mockito|mongodb|multi_agent_systems|multithreading|mysql|n8n|nexus|no_sql|object_serialization_deserialization_and_mapping|pip|poetry|postgresql|postman|principal_software_engineer|prometheus|python|rabbitmq|rag_pipelines|rancher|redis|regex|rest|rest_api|scylladb|servlets|solid_principles|spark|spring_framework|sql|sqlite|swagger|systems_thinking|telepresence|tomcat|uv|validation|vector_stores)"
-      options_fingerprint: null
-    strategy:
-      kind: "numeric_from_profile"
-      params:
-        # Use placeholder {skill} which will be substituted at runtime from the
-        # named capture group in q_pattern. The engine resolves it to
-        # years_experience.{skill}
-        key: "years_experience.{skill}"
-    constraints:
-      required: true
-    meta:
-      source: "manual"
-      confidence: 1.0
-      created_at: "2025-01-01T00:00:00Z"
-      last_seen: null
-      hits: 0
-#  - id: rule_002
-#    scope:
-#      site: '*'
-#      form_kind: job_apply
-#      locale:
-#        - en
-#        - ru
-#    signature:
-#      field_type: number
-#      q_pattern: "(years? of experience.*python|опыт.*python)"
-#      options_fingerprint: null
-#    strategy:
-#      kind: numeric_from_profile
-#      params:
-#        key: years_experience.python
-#    constraints:
-#      required: true
-#    meta:
-#      source: manual
-#      confidence: 1.0
-#      created_at: '2025-01-27T00:00:00Z'
-#      last_seen: null
-#      hits: 0
-  - id: rule_003
-    scope:
-      site: '*'
-      form_kind: job_apply
-      locale:
-        - en
-        - ru
-    signature:
-      field_type: text
-      q_pattern: "(preferred (work )?location|город|локация)"
-      options_fingerprint: null
-    strategy:
-      kind: profile_key
-      params:
-        key: preferred_location
-    constraints:
-      required: false
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-01-27T00:00:00Z'
-      last_seen: null
-      hits: 0
-  - id: rule_004
-    scope:
-      site: '*'
-      form_kind: job_apply
-      locale:
-        - en
-        - ru
-    signature:
-      field_type: text
-      q_pattern: "(phone|телефон)"
-      options_fingerprint: null
-    strategy:
-      kind: profile_key
-      params:
-        key: phone
-    constraints:
-      required: true
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-01-27T00:00:00Z'
-      last_seen: null
-      hits: 0
-  - id: rule_relocation_location
-    scope:
-      site: '*'
-      form_kind: job_apply
-      locale:
-        - en
-        - ru
-    signature:
-      field_type: text
-      q_pattern: "(preferred relocation location|relocation location)"
-      options_fingerprint: null
-    strategy:
-      kind: literal
-      params:
-        value: "USA, Western Europe"
-    constraints:
-      required: false
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-01-27T00:00:00Z'
-      last_seen: null
-      hits: 0
-#  - id: rule_005
-#    scope:
-#      site: '*'
-#      form_kind: job_apply
-#      locale:
-#        - en
-#        - ru
-#    signature:
-#      field_type: number
-#      q_pattern: "(years? of experience.*java|опыт.*java)"
-#      options_fingerprint: null
-#    strategy:
-#      kind: numeric_from_profile
-#      params:
-#        key: years_experience.java
-#    constraints:
-#      required: false
-#    meta:
-#      source: manual
-#      confidence: 1.0
-#      created_at: '2025-01-27T00:00:00Z'
-#      last_seen: null
-#      hits: 0
-  - id: rule_006
-    scope:
-      site: '*'
-      form_kind: job_apply
-      locale:
-        - en
-        - ru
-    signature:
-      field_type: radio
-      q_pattern: "(relocate|willing to relocate|готовность к переезду|relocation)"
-      options_fingerprint: null
-    strategy:
-      kind: one_of_options
-      params:
-        synonyms:
-          "Yes":
-            - "yes"
-            - да
-            - willing
-            - ready
-          "No":
-            - "no"
-            - нет
-            - not willing
-    constraints:
-      required: true
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-01-27T00:00:00Z'
-      last_seen: null
-      hits: 0
-  - id: rule_007
-    scope:
-      site: '*'
-      form_kind: job_apply
-      locale:
-        - en
-        - ru
-    signature:
-      field_type: text
-      q_pattern: "(github)"
-      options_fingerprint: null
-    strategy:
-      kind: profile_key
-      params:
-        key: links.github
-    constraints:
-      required: false
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-01-27T00:00:00Z'
-      last_seen: null
-      hits: 0
-  - id: rule_008
-    scope:
-      site: '*'
-      form_kind: job_apply
-      locale:
-        - en
-        - ru
-    signature:
-      field_type: text
-      q_pattern: "(linkedin)"
-      options_fingerprint: null
-    strategy:
-      kind: profile_key
-      params:
-        key: links.linkedin
-    constraints:
-      required: false
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-01-27T00:00:00Z'
-      last_seen: null
-      hits: 0
-  - id: rule_009
-    scope:
-      site: '*'
-      form_kind: job_apply
-      locale:
-        - en
-        - ru
-    signature:
-      field_type: select
-      q_pattern: "(communication|how would you like to be contacted|способ связи)"
-      options_fingerprint: null
-    strategy:
-      kind: profile_key
-      params:
-        key: preferred_communication
-    constraints:
-      required: false
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-01-27T00:00:00Z'
-      last_seen: null
-      hits: 0
-  - id: rule_gender
-    scope:
-      site: '*'
-    signature:
-      field_type: radio
-      q_pattern: "(gender|how do you identify|пол)"
-    strategy:
-      kind: one_of_options_from_profile
-      params:
-        key: equalOpportunity.gender
-        synonyms:
-          "Decline":
-            - decline
-            - prefer not to say
-            - не указывать
-          "Male":
-            - male
-            - мужской
-          "Female":
-            - female
-            - женский
-  - id: rule_ethnicity
-    scope:
-      site: '*'
-    signature:
-      field_type: radio
-      q_pattern: "(ethnicity|race|раса|этническая принадлежность)"
-    strategy:
-      kind: one_of_options_from_profile
-      params:
-        key: equalOpportunity.ethnicity
-        synonyms:
-          "Decline":
-            - decline
-            - prefer not to say
-            - не указывать
-  - id: rule_disability
-    scope:
-      site: '*'
-    signature:
-      field_type: radio
-      q_pattern: "(disability|инвалидность)"
-    strategy:
-      kind: one_of_options_from_profile
-      params:
-        key: equalOpportunity.disabilityStatus
-        synonyms:
-          "Decline":
-            - decline
-            - prefer not to say
-            - не указывать
-          "Yes":
-            - "yes"
-            - да
-          "No":
-            - "no"
-            - нет
-  - id: rule_veteran
-    scope:
-      site: '*'
-    signature:
-      field_type: radio
-      q_pattern: "(veteran|ветеран)"
-    strategy:
-      kind: one_of_options_from_profile
-      params:
-        key: equalOpportunity.veteranStatus
-        synonyms:
-          "Decline":
-            - decline
-            - prefer not to say
-            - не указывать
-          "Yes":
-            - "yes"
-            - да
-          "No":
-            - "no"
-            - нет
-  - id: rule_us_visa
-    scope:
-      site: '*'
-    signature:
-      field_type: radio
-      q_pattern: "(visa sponsorship|us citizen|гражданство сша)"
-    strategy:
-      kind: one_of_options_from_profile
-      params:
-        key: work_authorization.US
-        synonyms:
-          "yes":
-            - "yes"
-            - да
-            - U.S. Citizen/Permanent Resident
-          "no":
-            - "no"
-            - нет
-          "need_visa":
-            - need visa
-            - требуется виза
-  - id: rule_website
-    scope:
-      site: '*'
-    signature:
-      field_type: text
-      q_pattern: "(website|portfolio|сайт|портфолио)"
-    strategy:
-      kind: profile_key
-      params:
-        key: links.website
-  - id: rule_summary
-    scope:
-      site: '*'
-    signature:
-      field_type: text
-      q_pattern: "(summary|о себе)"
-    strategy:
-      kind: profile_key
-      params:
-        key: professional.summary
-  - id: rule_cover_letter
-    scope:
-      site: '*'
-    signature:
-      field_type: text
-      q_pattern: "(cover letter|сопроводительное письмо)"
-    strategy:
-      kind: profile_key
-      params:
-        key: professional.coverLetter
-  - id: rule_desired_salary
-    scope:
-      site: '*'
-    signature:
-      field_type: number
-      q_pattern: "(salary|зарплата|compensation)"
-    strategy:
-      kind: salary_by_currency
-      params:
-        base_key_template: "salary_expectation.monthly_net_{currency}"
-        default_currency: "nis"
-  - id: rule_notice_period
-    scope:
-      site: '*'
-    signature:
-      field_type: number
-      q_pattern: "(notice period|срок уведомления)"
-    strategy:
-      kind: profile_key
-      params:
-        key: notice_period_days
-  - id: rule_education_bachelor
-    scope:
-      site: '*'
-    signature:
-      field_type: radio
-      q_pattern: "(bachelor's degree|бакалавр)"
-    strategy:
-      kind: conditional_literal
-      params:
-        condition_key: education.level
-        condition_value: bachelor
-        value: "Yes"
-  - id: rule_palo_alto_employment
-    scope:
-      site: '*'
-    signature:
-      field_type: radio
-      q_pattern: "(previously worked for Palo Alto Networks|работали в Palo Alto Networks)"
-    strategy:
-      kind: one_of_options_from_profile
-      params:
-        key: previous_employment.palo_alto_networks
-        synonyms:
-          "no":
-            - "No - I have not worked for Palo Alto Networks"
-            - нет
-  - id: rule_navan_employment
-    scope:
-      site: '*'
-    signature:
-      field_type: radio
-      q_pattern: "(employed by.*Navan|работали в Navan)"
-    strategy:
-      kind: one_of_options_from_profile
-      params:
-        key: previous_employment.navan
-        synonyms:
-          "no":
-            - "no"
-            - нет
-#  - id: rule_experience_spark
-#    scope:
-#      site: '*'
-#    signature:
-#      field_type: number
-#      q_pattern: "(years? of experience.*spark|опыт.*spark)"
-#    strategy:
-#      kind: numeric_from_profile
-#      params:
-#        key: years_experience.spark
-#  - id: rule_experience_kubernetes
-#    scope:
-#      site: '*'
-#    signature:
-#      field_type: number
-#      q_pattern: "(years? of experience.*kubernetes|опыт.*kubernetes)"
-#    strategy:
-#      kind: numeric_from_profile
-#      params:
-#        key: years_experience.kubernetes
-#  - id: rule_experience_aws
-#    scope:
-#      site: '*'
-#    signature:
-#      field_type: number
-#      q_pattern: "(years? of experience.*aws|опыт.*aws)"
-#    strategy:
-#      kind: numeric_from_profile
-#      params:
-#        key: years_experience.aws
-#  - id: rule_experience_gcp
-#    scope:
-#      site: '*'
-#    signature:
-#      field_type: number
-#      q_pattern: "(years? of experience.*gcp|опыт.*gcp)"
-#    strategy:
-#      kind: numeric_from_profile
-#      params:
-#        key: years_experience.gcp
-#  - id: rule_experience_azure
-#    scope:
-#      site: '*'
-#    signature:
-#      field_type: number
-#      q_pattern: "(years? of experience.*azure|опыт.*azure)"
-#    strategy:
-#      kind: numeric_from_profile
-#      params:
-#        key: years_experience.azure
-  - id: rule_firstName
-    scope:
-      site: '*'
-    signature:
-      field_type: text
-      q_pattern: "(first name|имя)"
-    strategy:
-      kind: profile_key
-      params:
-        key: personal.firstName
-  - id: rule_lastName
-    scope:
-      site: '*'
-    signature:
-      field_type: text
-      q_pattern: "(last name|фамилия)"
-    strategy:
-      kind: profile_key
-      params:
-        key: personal.lastName
-  - id: rule_city
-    scope:
-      site: '*'
-    signature:
-      field_type: text
-      q_pattern: "(city|город)"
-    strategy:
-      kind: profile_key
-      params:
-        key: address.city
-  - id: rule_country
-    scope:
-      site: '*'
-    signature:
-      field_type: text
-      q_pattern: "(country|страна)"
-    strategy:
-      kind: profile_key
-      params:
-        key: address.country
-  - id: rule_how_did_you_hear
-    scope:
-      site: '*'
-    signature:
-      field_type: text
-      q_pattern: "(how did you hear|откуда узнали)"
-    strategy:
-      kind: profile_key
-      params:
-        key: how_did_you_hear
-  - id: rule_future_opportunities
-    scope:
-      site: '*'
-    signature:
-      field_type: radio
-      q_pattern: "(future opportunities|будущие вакансии)"
-    strategy:
-      kind: one_of_options_from_profile
-      params:
-        key: future_opportunities_willingness
-        synonyms:
-          "Yes":
-            - "yes"
-            - да
-          "No":
-            - "no"
-            - нет
-  - id: rule_contact_email_text
-    scope:
-      site: '*'
-    signature:
-      field_type: text
-      q_pattern: "(email|e-mail|электронная почта)"
-    strategy:
-      kind: profile_key
-      params:
-        key: email
-
-  - id: rule_contact_email_select
-    scope:
-      site: '*'
-      form_kind: job_apply
-      locale:
-        - en
-        - ru
-    signature:
-      field_type: select
-      q_pattern: "(email|e-mail|электронная почта)"
-      options_fingerprint: null
-    strategy:
-      kind: profile_key
-      params:
-        key: email
-    constraints:
-      required: true
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-02-16T00:00:00Z'
-      last_seen: null
-      hits: 0
-
-  - id: rule_phone_country_code
-    scope:
-      site: '*'
-      form_kind: job_apply
-      locale:
-        - en
-        - ru
-    signature:
-      field_type: select
-      q_pattern: "(phone country code|код страны телефона)"
-      options_fingerprint: null
-    strategy:
-      kind: one_of_options
-      params:
-        synonyms:
-          "Israel (+972)":
-            - "israel (+972)"
-            - "+972"
-            - "israel"
-    constraints:
-      required: true
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-02-16T00:00:00Z'
-      last_seen: null
-      hits: 0
-
-  - id: rule_uncheck_follow_company
-    scope:
-      site: '*'
-      form_kind: job_apply
-      locale:
-        - en
-        - ru
-    signature:
-      field_type: checkbox
-      q_pattern: "(follow .* to stay up to date|follow company|подписаться на компанию)"
-      options_fingerprint: null
-    strategy:
-      kind: literal
-      params:
-        value: "No"
-    constraints:
-      required: false
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-11-07T00:00:00Z'
-      last_seen: null
-      hits: 0
-
-  - id: rule_city_combobox
-    scope:
-      site: '*'
-    signature:
-      field_type: combobox
-      q_pattern: "(location.*city|city|город)"
-    strategy:
-      kind: profile_key
-      params:
-        key: address.city
-    meta:
-      source: manual
-      confidence: 1.0
-      created_at: '2025-11-07T00:00:00Z'
+- constraints:
+    required: true
+  id: rule_001
+  meta:
+    confidence: 1.0
+    created_at: '2025-01-27T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: null
+    q_pattern: (visa|work authorization|разрешение на работу|legal authorization)
+  strategy:
+    kind: one_of_options
+    params:
+      synonyms:
+        'No':
+        - 'no'
+        - нет
+        'Yes':
+        - 'yes'
+        - да
+        - authorized
+        - i am authorized
+- constraints:
+    required: true
+  id: rule_years_experience_by_skill
+  meta:
+    confidence: 1.0
+    created_at: '2025-01-01T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: number
+    options_fingerprint: null
+    q_pattern: (?P<skill>ai_workflows|ai|architecture|artifactory|authentication|aws|azure|bash|bitbucket|bucket4j|business_needs_translation|captcha|cassandra|chrome_devtools|ci_cd|cursor|data_integration|data_platforms|databricks|docker|docker_compose|dynamodb|elasticsearch|feign_client|firebase|founders_interaction|gcp|github|gitlab|google_maps_api|gradle|grafana|grpc|h2|hibernate|html|java|jenkins|jdbc|jira|json|jsoup|junit|kafka|kafka_streams|kibana|kube_forwarder|kubernetes|langchain|llm|llm_based_workflows|llms|lombok|maven|mockito|mongodb|multi_agent_systems|multithreading|mysql|n8n|nexus|no_sql|object_serialization_deserialization_and_mapping|pip|poetry|postgresql|postman|principal_software_engineer|prometheus|python|rabbitmq|rag_pipelines|rancher|redis|regex|rest|rest_api|scylladb|servlets|solid_principles|spark|spring_framework|sql|sqlite|swagger|systems_thinking|telepresence|tomcat|uv|validation|vector_stores)
+  strategy:
+    kind: numeric_from_profile
+    params:
+      key: years_experience.{skill}
+- constraints:
+    required: false
+  id: rule_003
+  meta:
+    confidence: 1.0
+    created_at: '2025-01-27T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: text
+    options_fingerprint: null
+    q_pattern: (preferred (work )?location|город|локация)
+  strategy:
+    kind: profile_key
+    params:
+      key: preferred_location
+- constraints:
+    required: true
+  id: rule_004
+  meta:
+    confidence: 1.0
+    created_at: '2025-01-27T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: text
+    options_fingerprint: null
+    q_pattern: (phone|телефон)
+  strategy:
+    kind: profile_key
+    params:
+      key: phone
+- constraints:
+    required: false
+  id: rule_relocation_location
+  meta:
+    confidence: 1.0
+    created_at: '2025-01-27T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: text
+    options_fingerprint: null
+    q_pattern: (preferred relocation location|relocation location)
+  strategy:
+    kind: literal
+    params:
+      value: USA, Western Europe
+- constraints:
+    required: true
+  id: rule_006
+  meta:
+    confidence: 1.0
+    created_at: '2025-01-27T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: null
+    q_pattern: (relocate|willing to relocate|готовность к переезду|relocation)
+  strategy:
+    kind: one_of_options
+    params:
+      synonyms:
+        'No':
+        - 'no'
+        - нет
+        - not willing
+        'Yes':
+        - 'yes'
+        - да
+        - willing
+        - ready
+- constraints:
+    required: false
+  id: rule_007
+  meta:
+    confidence: 1.0
+    created_at: '2025-01-27T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: text
+    options_fingerprint: null
+    q_pattern: (github)
+  strategy:
+    kind: profile_key
+    params:
+      key: links.github
+- constraints:
+    required: false
+  id: rule_008
+  meta:
+    confidence: 1.0
+    created_at: '2025-01-27T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: text
+    options_fingerprint: null
+    q_pattern: (linkedin)
+  strategy:
+    kind: profile_key
+    params:
+      key: links.linkedin
+- constraints:
+    required: false
+  id: rule_009
+  meta:
+    confidence: 1.0
+    created_at: '2025-01-27T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: null
+    q_pattern: (communication|how would you like to be contacted|способ связи)
+  strategy:
+    kind: profile_key
+    params:
+      key: preferred_communication
+- id: rule_gender
+  scope:
+    site: '*'
+  signature:
+    field_type: radio
+    q_pattern: (gender|how do you identify|пол)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: equalOpportunity.gender
+      synonyms:
+        Decline:
+        - decline
+        - prefer not to say
+        - не указывать
+        Female:
+        - female
+        - женский
+        Male:
+        - male
+        - мужской
+- id: rule_ethnicity
+  scope:
+    site: '*'
+  signature:
+    field_type: radio
+    q_pattern: (ethnicity|race|раса|этническая принадлежность)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: equalOpportunity.ethnicity
+      synonyms:
+        Decline:
+        - decline
+        - prefer not to say
+        - не указывать
+- id: rule_disability
+  scope:
+    site: '*'
+  signature:
+    field_type: radio
+    q_pattern: (disability|инвалидность)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: equalOpportunity.disabilityStatus
+      synonyms:
+        Decline:
+        - decline
+        - prefer not to say
+        - не указывать
+        'No':
+        - 'no'
+        - нет
+        'Yes':
+        - 'yes'
+        - да
+- id: rule_veteran
+  scope:
+    site: '*'
+  signature:
+    field_type: radio
+    q_pattern: (veteran|ветеран)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: equalOpportunity.veteranStatus
+      synonyms:
+        Decline:
+        - decline
+        - prefer not to say
+        - не указывать
+        'No':
+        - 'no'
+        - нет
+        'Yes':
+        - 'yes'
+        - да
+- id: rule_us_visa
+  scope:
+    site: '*'
+  signature:
+    field_type: radio
+    q_pattern: (visa sponsorship|us citizen|гражданство сша)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: work_authorization.US
+      synonyms:
+        need_visa:
+        - need visa
+        - требуется виза
+        'no':
+        - 'no'
+        - нет
+        'yes':
+        - 'yes'
+        - да
+        - U.S. Citizen/Permanent Resident
+- id: rule_website
+  scope:
+    site: '*'
+  signature:
+    field_type: text
+    q_pattern: (website|portfolio|сайт|портфолио)
+  strategy:
+    kind: profile_key
+    params:
+      key: links.website
+- id: rule_summary
+  scope:
+    site: '*'
+  signature:
+    field_type: text
+    q_pattern: (summary|о себе)
+  strategy:
+    kind: profile_key
+    params:
+      key: professional.summary
+- id: rule_cover_letter
+  scope:
+    site: '*'
+  signature:
+    field_type: text
+    q_pattern: (cover letter|сопроводительное письмо)
+  strategy:
+    kind: profile_key
+    params:
+      key: professional.coverLetter
+- id: rule_desired_salary
+  scope:
+    site: '*'
+  signature:
+    field_type: number
+    q_pattern: (salary|зарплата|compensation)
+  strategy:
+    kind: salary_by_currency
+    params:
+      base_key_template: salary_expectation.monthly_net_{currency}
+      default_currency: nis
+- id: rule_notice_period
+  scope:
+    site: '*'
+  signature:
+    field_type: number
+    q_pattern: (notice period|срок уведомления)
+  strategy:
+    kind: profile_key
+    params:
+      key: notice_period_days
+- id: rule_education_bachelor
+  scope:
+    site: '*'
+  signature:
+    field_type: radio
+    q_pattern: (bachelor's degree|бакалавр)
+  strategy:
+    kind: conditional_literal
+    params:
+      condition_key: education.level
+      condition_value: bachelor
+      value: 'Yes'
+- id: rule_palo_alto_employment
+  scope:
+    site: '*'
+  signature:
+    field_type: radio
+    q_pattern: (previously worked for Palo Alto Networks|работали в Palo Alto Networks)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: previous_employment.palo_alto_networks
+      synonyms:
+        'no':
+        - No - I have not worked for Palo Alto Networks
+        - нет
+- id: rule_navan_employment
+  scope:
+    site: '*'
+  signature:
+    field_type: radio
+    q_pattern: (employed by.*Navan|работали в Navan)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: previous_employment.navan
+      synonyms:
+        'no':
+        - 'no'
+        - нет
+- id: rule_firstName
+  scope:
+    site: '*'
+  signature:
+    field_type: text
+    q_pattern: (first name|имя)
+  strategy:
+    kind: profile_key
+    params:
+      key: personal.firstName
+- id: rule_lastName
+  scope:
+    site: '*'
+  signature:
+    field_type: text
+    q_pattern: (last name|фамилия)
+  strategy:
+    kind: profile_key
+    params:
+      key: personal.lastName
+- id: rule_city
+  scope:
+    site: '*'
+  signature:
+    field_type: text
+    q_pattern: (city|город)
+  strategy:
+    kind: profile_key
+    params:
+      key: address.city
+- id: rule_country
+  scope:
+    site: '*'
+  signature:
+    field_type: text
+    q_pattern: (country|страна)
+  strategy:
+    kind: profile_key
+    params:
+      key: address.country
+- id: rule_how_did_you_hear
+  scope:
+    site: '*'
+  signature:
+    field_type: text
+    q_pattern: (how did you hear|откуда узнали)
+  strategy:
+    kind: profile_key
+    params:
+      key: how_did_you_hear
+- id: rule_future_opportunities
+  scope:
+    site: '*'
+  signature:
+    field_type: radio
+    q_pattern: (future opportunities|будущие вакансии)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: future_opportunities_willingness
+      synonyms:
+        'No':
+        - 'no'
+        - нет
+        'Yes':
+        - 'yes'
+        - да
+- id: rule_contact_email_text
+  scope:
+    site: '*'
+  signature:
+    field_type: text
+    q_pattern: (email|e-mail|электронная почта)
+  strategy:
+    kind: profile_key
+    params:
+      key: email
+- constraints:
+    required: true
+  id: rule_contact_email_select
+  meta:
+    confidence: 1.0
+    created_at: '2025-02-16T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: null
+    q_pattern: (email|e-mail|электронная почта)
+  strategy:
+    kind: profile_key
+    params:
+      key: email
+- constraints:
+    required: true
+  id: rule_phone_country_code
+  meta:
+    confidence: 1.0
+    created_at: '2025-02-16T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: null
+    q_pattern: (phone country code|код страны телефона)
+  strategy:
+    kind: one_of_options
+    params:
+      synonyms:
+        Israel (+972):
+        - israel (+972)
+        - '+972'
+        - israel
+- constraints:
+    required: false
+  id: rule_uncheck_follow_company
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-07T00:00:00Z'
+    hits: 0
+    last_seen: null
+    source: manual
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    - ru
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (follow .* to stay up to date|follow company|подписаться на компанию)
+  strategy:
+    kind: literal
+    params:
+      value: 'No'
+- id: rule_city_combobox
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-07T00:00:00Z'
+    source: manual
+  scope:
+    site: '*'
+  signature:
+    field_type: combobox
+    q_pattern: (location.*city|city|город)
+  strategy:
+    kind: profile_key
+    params:
+      key: address.city
+- constraints:
+    required: true
+  id: rls_1762800771
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-10T18:52:51Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: sha1:aa5340a0cdc6233c3841b13ae801faa36b6f784d
+    q_pattern: (comfortable.*office|work.*office|onsite|in-person|готовность.*офис|работать.*офис|офис.*формат)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'Yes'
+- constraints:
+    required: true
+  id: rls_1762800787
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-10T18:53:07Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: sha1:aa5340a0cdc6233c3841b13ae801faa36b6f784d
+    q_pattern: (native|родной).*?(?P<language>hebrew|иврит|english|английский|russian|русский)
+      speaker
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: languages[0].language
+      synonyms:
+        English:
+        - English
+        - english
+        - английский
+        Hebrew:
+        - Hebrew
+        - hebrew
+        - иврит
+        Russian:
+        - Russian
+        - russian
+        - русский
+- constraints:
+    required: true
+  id: rls_1762800793
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-10T18:53:13Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: text
+    options_fingerprint: null
+    q_pattern: (years? of (work )?experience|опыт).*?(with|по|в)\s*(python|питон)
+  strategy:
+    kind: numeric_from_profile
+    params:
+      key: years_experience.python
+- constraints:
+    required: true
+  id: rls_1762800818
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-10T18:53:38Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: sha1:aa5340a0cdc6233c3841b13ae801faa36b6f784d
+    q_pattern: (experience|опыт).*?(with|с)\s*(?P<skill>[\w\s-]+).*?(at least|минимум)?\s*(?P<years>\d+)\s*(year|год)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'Yes'
+- constraints:
+    required: true
+  id: rls_1762800831
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-10T18:53:51Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: sha1:aa5340a0cdc6233c3841b13ae801faa36b6f784d
+    q_pattern: (native|родной).*?(?P<language>hebrew|иврит|english|английский|russian|русский).*?(speaker|говорящий)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: languages[0].language
+      synonyms:
+        English:
+        - English
+        - english
+        - английский
+        Hebrew:
+        - Hebrew
+        - hebrew
+        - иврит
+        Russian:
+        - Russian
+        - russian
+        - русский
+schema_version: '1.0'

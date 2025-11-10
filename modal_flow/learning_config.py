@@ -20,6 +20,8 @@ class LearningConfig:
     Attributes:
         enabled: Master switch for learning mechanism
         auto_learn: Automatically add validated rules to RuleStore
+        use_separate_rule_generation: Use separate LLM call for rule generation (recommended)
+        rule_generation_fallback: Use suggest_rule from decision as fallback if separate generation fails
         confidence_threshold: Minimum confidence score (0.0-1.0) to accept LLM suggestions
         enable_duplicate_check: Check for duplicate rules before adding
         enable_pattern_validation: Validate regex patterns before adding
@@ -43,6 +45,10 @@ class LearningConfig:
     
     # Auto-learning behavior
     auto_learn: bool = True
+    
+    # Rule generation settings
+    use_separate_rule_generation: bool = True  # Use separate LLM call for rule generation
+    rule_generation_fallback: bool = True  # Use suggest_rule from decision as fallback if separate generation fails
     
     # Quality thresholds
     confidence_threshold: float = 0.85

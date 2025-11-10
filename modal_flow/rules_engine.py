@@ -15,6 +15,7 @@ from modal_flow.normalizer import QuestionNormalizer
 from modal_flow.learning_config import LearningConfig
 from modal_flow.rule_validator import RuleSuggestionValidator
 from modal_flow.strategies import create_strategy, STRATEGY_MAPPING
+from modal_flow.llm_delegate import LLMDecision
 
 
 class RulesEngine:
@@ -116,6 +117,8 @@ class RulesEngine:
         
         # Step 1: Find rule
         rule = self.rule_store.find(signature)
+        rule_found = rule is not None
+        
         if rule:
             self.logger.debug(f"Rule found: {rule.get('id')}")
             strategy_kind = rule.get("strategy", {}).get("kind")
@@ -167,13 +170,37 @@ class RulesEngine:
                         a_field={"question": question, "options": options},
                     )
                     self.logger.info(f"Rule decision: {decision}")
-                    return decision
+                    
+                    # NEW: Validate decision - if rule found but returns None/invalid, treat as error
+                    if decision is None:
+                        self.logger.warning(
+                            f"Rule '{rule.get('id')}' found but strategy returned None. "
+                            f"Treating as rule failure and delegating to LLM fallback."
+                        )
+                        # Fall through to LLM delegation
+                    elif self._is_invalid_decision(decision, field_type, options):
+                        self.logger.warning(
+                            f"Rule '{rule.get('id')}' found but returned invalid value: '{decision}'. "
+                            f"Treating as rule failure and delegating to LLM fallback."
+                        )
+                        # Fall through to LLM delegation
+                    else:
+                        # Decision is valid, return it
+                        return decision
                 except Exception as e:
-                    self.logger.error(f"Strategy execution failed: {e}", exc_info=True)
+                    self.logger.error(
+                        f"Strategy execution failed for rule '{rule.get('id')}': {e}. "
+                        f"Delegating to LLM fallback.", exc_info=True
+                    )
+                    # Fall through to LLM delegation
             else:
-                self.logger.warning(f"Strategy kind not specified in rule: {rule.get('id')}")
+                self.logger.warning(
+                    f"Strategy kind not specified in rule: {rule.get('id')}. "
+                    f"Delegating to LLM fallback."
+                )
+                # Fall through to LLM delegation
 
-        # Step 2: Heuristic fallback
+        # Step 2: Heuristic fallback (only if no rule was found or rule failed)
         heuristic_decision = self._apply_heuristics(q_norm, field_type, options, question)
         if heuristic_decision is not None:
             self.logger.info(f"Heuristic decision: {heuristic_decision}")
@@ -181,27 +208,28 @@ class RulesEngine:
         
         # Step 3: LLM Delegation
         if self.llm_delegate:
-            # Log when delegating boolean-like groups to LLM so we can collect examples
-            # for building rules and to measure frequency of LLM usage.
-            if field_type in ("radio", "checkbox"):
-                try:
-                    # Prepare a compact profile summary for logging (avoid huge dumps)
-                    profile_summary = self.profile.to_json_summary() if hasattr(self.profile, "to_json_summary") else {}
-                except Exception:
-                    profile_summary = {}
+            # Log when delegating to LLM
+            try:
+                # Prepare a compact profile summary for logging (avoid huge dumps)
+                profile_summary = self.profile.to_json_summary() if hasattr(self.profile, "to_json_summary") else {}
+            except Exception:
+                profile_summary = {}
 
-                # options may be None or a list; display safely
-                opts_display = options if options is not None else []
+            # options may be None or a list; display safely
+            opts_display = options if options is not None else []
 
-                # WARNING: logs may contain personal profile data; ensure log access is restricted
-                self.logger.info(
-                    "[LLM_DELEGATE] No rule/heuristic found for boolean field; delegating to LLM. "
-                    f"question='{question}', q_norm='{q_norm}', options={opts_display}, "
-                    f"site='{site}', form_kind='{form_kind}', locale='{locale}', "
-                    f"profile_summary={profile_summary}"
-                )
+            # Determine reason for LLM delegation
+            if rule_found and rule:
+                delegation_reason = f"Rule '{rule.get('id')}' found but failed to produce valid value"
+            else:
+                delegation_reason = "No matching rule found"
 
-            self.logger.info("Delegating to LLM")
+            self.logger.info(
+                f"[LLM_DELEGATE] {delegation_reason}. Delegating to LLM. "
+                f"question='{question}', field_type='{field_type}', "
+                f"q_norm='{q_norm}', options={opts_display}, "
+                f"site='{site}', form_kind='{form_kind}', locale='{locale}'"
+            )
             
             # Build field_info for LLM
             field_info = {
@@ -223,9 +251,9 @@ class RulesEngine:
                 if llm_decision and llm_decision.decision != "skip":
                     self.logger.info(f"LLM decision: {llm_decision.value} (confidence={llm_decision.confidence:.2f})")
                     
-                    # ◄────────── НОВОЕ: Обработка предложенного правила ──────────►
+                    # Process rule generation if learning is enabled
                     if self.learning_config.enabled and self.learning_config.auto_learn:
-                        # Создать signature для этого поля
+                        # Create signature for this field
                         opts_fp = options_fingerprint(options) if options else None
                         q_norm = self.normalizer.normalize_text(question)
                         signature = FieldSignature(
@@ -237,12 +265,61 @@ class RulesEngine:
                             locale=locale
                         )
                         
-                        # Обработать предложенное правило
-                        await self._process_suggested_rule(
-                            llm_decision=llm_decision,
-                            signature=signature
-                        )
-                    # ◄─────────────────────────────────────────────────────────────►
+                        # Generate rule using separate request if enabled
+                        suggest_rule = None
+                        rule_confidence = llm_decision.confidence
+                        
+                        if self.learning_config.use_separate_rule_generation:
+                            try:
+                                self.logger.debug("Generating rule using separate LLM request")
+                                rule_suggestion = await self.llm_delegate.generate_rule(
+                                    field_info=field_info,
+                                    selected_value=llm_decision.value,
+                                    profile=self.profile,
+                                    job_context=None  # Can be extended to pass job_context if available
+                                )
+                                
+                                if rule_suggestion:
+                                    # Convert RuleSuggestion to suggest_rule format
+                                    suggest_rule = {
+                                        "q_pattern": rule_suggestion.q_pattern,
+                                        "strategy": {
+                                            "kind": rule_suggestion.strategy.kind,
+                                            "params": rule_suggestion.strategy.params
+                                        }
+                                    }
+                                    rule_confidence = rule_suggestion.confidence
+                                    self.logger.info(
+                                        f"Rule generated successfully: pattern='{rule_suggestion.q_pattern}', "
+                                        f"strategy={rule_suggestion.strategy.kind}, "
+                                        f"confidence={rule_suggestion.confidence:.2f}"
+                                    )
+                                else:
+                                    self.logger.warning("Rule generation returned None")
+                            except Exception as e:
+                                self.logger.error(f"Rule generation failed: {e}", exc_info=True)
+                        
+                        # Fallback to suggest_rule from decision if separate generation failed and fallback is enabled
+                        if not suggest_rule and self.learning_config.rule_generation_fallback:
+                            if llm_decision.suggest_rule and llm_decision.suggest_rule.get("q_pattern"):
+                                suggest_rule = llm_decision.suggest_rule
+                                self.logger.info("Using suggest_rule from LLM decision as fallback")
+                        
+                        # Process the rule if we have one
+                        if suggest_rule:
+                            # Create a temporary LLMDecision-like object with the rule
+                            rule_decision = LLMDecision(
+                                decision=llm_decision.decision,
+                                value=llm_decision.value,
+                                confidence=rule_confidence,
+                                suggest_rule=suggest_rule
+                            )
+                            await self._process_suggested_rule(
+                                llm_decision=rule_decision,
+                                signature=signature
+                            )
+                        else:
+                            self.logger.debug("No rule to process (generation failed and no fallback available)")
                     
                     return llm_decision.value
                 else:
@@ -294,11 +371,42 @@ class RulesEngine:
             return
         
         # Check 3: Validate structure
-        if self.learning_config.enable_pattern_validation:
+        if self.learning_config.enable_pattern_validation or self.learning_config.enable_strategy_validation:
             is_valid, error_msg = self.rule_validator.validate(suggest_rule)
             if not is_valid:
                 self.logger.warning(f"Rule suggestion validation failed: {error_msg}")
                 return
+            
+            # Additional validation: check if params are empty for strategies that require them
+            strategy = suggest_rule.get("strategy", {})
+            strategy_kind = strategy.get("kind")
+            params = strategy.get("params", {})
+            
+            if strategy_kind:
+                strategies_requiring_params = [
+                    "one_of_options",
+                    "one_of_options_from_profile",
+                    "numeric_from_profile",
+                    "profile_key"
+                ]
+                
+                if strategy_kind in strategies_requiring_params:
+                    is_empty = len(params) == 0
+                    
+                    # For one_of_options, check if preferred or synonyms is missing
+                    if strategy_kind == "one_of_options":
+                        is_empty = "preferred" not in params and "synonyms" not in params
+                    
+                    # For strategies requiring key, check if key is missing
+                    elif strategy_kind in ["one_of_options_from_profile", "numeric_from_profile", "profile_key"]:
+                        is_empty = "key" not in params or not params.get("key")
+                    
+                    if is_empty:
+                        self.logger.warning(
+                            f"Rule suggestion rejected: {strategy_kind} strategy requires params but got empty params. "
+                            f"Rule will not be saved."
+                        )
+                        return
         
         # Check 4: Check for duplicates
         if self.learning_config.enable_duplicate_check:
@@ -395,4 +503,63 @@ class RulesEngine:
                 bio = self.profile.short_bio_en or self.profile.short_bio_ru
                 if bio:
                     return bio[:200]  # Truncate for safety
+    
+    def _is_invalid_decision(self, decision: Any, field_type: str, options: Optional[List[str]]) -> bool:
+        """
+        Check if a decision value is invalid for the given field type.
+        
+        Args:
+            decision: The decision value to validate
+            field_type: Type of field (radio, checkbox, select, etc.)
+            options: Available options for select/radio fields
+            
+        Returns:
+            True if decision is invalid, False otherwise
+        """
+        # None is always invalid (handled separately, but check here too)
+        if decision is None:
+            return True
+        
+        # Convert to string for validation
+        decision_str = str(decision).strip() if decision else ""
+        
+        # Empty string is invalid
+        if not decision_str:
+            return True
+        
+        # Check for placeholder/invalid values
+        invalid_placeholders = [
+            "select an option",
+            "choose an option",
+            "выберите вариант",
+            "выбрать вариант",
+        ]
+        
+        decision_lower = decision_str.lower()
+        if decision_lower in invalid_placeholders:
+            return True
+        
+        # For select/radio/combobox fields, decision must be in the options list
+        if field_type in ("select", "radio", "combobox") and options:
+            # Normalize options and decision for comparison
+            options_normalized = [self.normalizer.normalize_string(opt).lower() for opt in options]
+            decision_normalized = self.normalizer.normalize_string(decision_str).lower()
+            
+            # Check if decision matches any option exactly
+            if decision_normalized not in options_normalized:
+                # Also check if decision is a substring of any option (for partial matches)
+                # This handles cases where option might be "Yes, I am willing" and decision is "Yes"
+                matches = False
+                for opt_norm in options_normalized:
+                    # Check if decision is contained in option or vice versa
+                    if decision_normalized in opt_norm or opt_norm in decision_normalized:
+                        # But exclude very short matches that might be false positives
+                        if len(decision_normalized) >= 2 and len(opt_norm) >= 2:
+                            matches = True
+                            break
+                
+                if not matches:
+                    return True
+        
+        return False
 

@@ -65,6 +65,8 @@ class ModalFlowResources:
             self._learning_config = LearningConfig(
                 enabled=cfg.enabled,
                 auto_learn=cfg.auto_learn,
+                use_separate_rule_generation=cfg.use_separate_rule_generation,
+                rule_generation_fallback=cfg.rule_generation_fallback,
                 confidence_threshold=cfg.confidence_threshold,
                 enable_duplicate_check=cfg.enable_duplicate_check,
                 enable_pattern_validation=cfg.enable_pattern_validation,

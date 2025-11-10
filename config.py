@@ -75,7 +75,7 @@ class JobSearchConfig(BaseSettings):
     distance: str = "20"
     job_search_period_seconds: int = 2592000  # 30 days in seconds / 7 days = 604800 / 2 days = 172800 / 1 day = 86400
     sort_by: str = "DD"  # DD = Date Descending, R = Relevance
-    job_title_regex: str = r"(?i)^(?!.*(rust|laravel|php|junior|angular|driver|go(lang)|architect|qa|unity|technical|lead|teamlead|devops|salesforce|technology|llm|embedded|hardware|android|firmware|c\+\+|\.net|c#)).*?(automation|staff|sw|solution(s)|software|java|python|data|back\s*end|ai|chatbot|principal|full\s*stack|senior).*?.*?(developer|engineer).*$"
+    job_title_regex: str = r"(?i)^(?!.*(frontend|rust|laravel|php|junior|angular|driver|go(lang)|architect|qa|unity|technical|lead|teamlead|devops|salesforce|technology|llm|embedded|hardware|android|firmware|c\+\+|\.net|c#)).*?(automation|staff|sw|solution(s)|software|java|python|data|back\s*end|ai|chatbot|principal|full\s*stack|senior).*?.*?(developer|engineer).*$"
     job_description_regex: str = r".*"
     job_description_languages: List[str] = ["en", "ru"]
 
@@ -159,7 +159,7 @@ class JobLimitsConfig(BaseSettings):
 
     max_jobs_to_discover: Optional[int] = 0
     max_jobs_to_enrich: Optional[int] = 0
-    max_jobs_to_process: Optional[int] = 2
+    max_jobs_to_process: Optional[int] = 4
 
 
 class PerformanceConfig(BaseSettings):
@@ -226,6 +226,8 @@ class ModalFlowLearningSettings(BaseSettings):
 
     enabled: bool = True
     auto_learn: bool = True
+    use_separate_rule_generation: bool = True  # Use separate LLM call for rule generation
+    rule_generation_fallback: bool = True  # Use suggest_rule from decision as fallback
     confidence_threshold: float = 0.85
     enable_duplicate_check: bool = True
     enable_pattern_validation: bool = True
@@ -247,7 +249,7 @@ class ModalFlowConfig(BaseSettings):
     profile_path: Path = Path("config/profile_example.json")
     rules_path: Path = Path("config/rules.yaml")
     normalizer_rules_path: Optional[Path] = Path("config/normalizer_rules.yaml")
-    max_steps: int = 8
+    max_steps: int = 16
     llm_delegate_enabled: bool = True
     learning: ModalFlowLearningSettings = ModalFlowLearningSettings()
 

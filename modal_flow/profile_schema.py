@@ -95,15 +95,34 @@ class CandidateProfile(BaseModel):
     def get_nested_value(self, key_path: str) -> any:
         """
         Get a nested value from the profile using dot notation.
+        Supports array indexing with [index] syntax.
         Example: "years_experience.python" -> 7
+        Example: "languages[0].language" -> "English"
         """
+        import re
         parts = key_path.split(".")
         current = self.model_dump()
         
         for part in parts:
-            if isinstance(current, dict) and part in current:
-                current = current[part]
+            # Check if part contains array index like "languages[0]"
+            array_match = re.match(r'^(\w+)\[(\d+)\]$', part)
+            if array_match:
+                key = array_match.group(1)
+                index = int(array_match.group(2))
+                
+                if isinstance(current, dict) and key in current:
+                    current = current[key]
+                    if isinstance(current, list) and 0 <= index < len(current):
+                        current = current[index]
+                    else:
+                        return None
+                else:
+                    return None
             else:
-                return None
+                # Regular key access
+                if isinstance(current, dict) and part in current:
+                    current = current[part]
+                else:
+                    return None
         return current
 

@@ -39,6 +39,9 @@
 **[LLM интеграция](llm-integration.md)**  
 Архитектура модуля LLM: поддерживаемые провайдеры (OpenAI, Anthropic, Ollama), фильтрация вакансий по соответствию навыкам, генерация персонализированных сопроводительных писем, конфигурация и промпты.
 
+**[Генерация правил для Modal Flow](modal-flow-rule-generation.md)**  
+Автоматическая генерация правил для заполнения полей форм через отдельный запрос к LLM. Архитектура, конфигурация, примеры использования и отладка.
+
 ### Производительность
 
 **[Оптимизация производительности](performance-optimization.md)**  
@@ -114,6 +117,7 @@ docs/
 ├── project-structure.md               # Техническая структура
 ├── database-schema.md                 # Схема БД
 ├── llm-integration.md                 # AI и LLM
+├── modal-flow-rule-generation.md      # Генерация правил для Modal Flow
 ├── performance-optimization.md        # Оптимизации
 ├── testing.md                         # Тестирование
 ├── contribution-guide.md              # Гайд для контрибьюторов
@@ -156,7 +160,8 @@ docs/
 
 ### Если настраиваете AI-фильтрацию:
 1. [LLM интеграция](llm-integration.md)
-2. [Руководство по началу работы](getting-started.md) (раздел LLM)
+2. [Генерация правил для Modal Flow](modal-flow-rule-generation.md)
+3. [Руководство по началу работы](getting-started.md) (раздел LLM)
 
 ### Если оптимизируете производительность:
 1. [Оптимизация производительности](performance-optimization.md)
@@ -170,6 +175,7 @@ docs/
 - **Не понимаете архитектуру?** → [Архитектура проекта](architecture.md)
 - **Хотите добавить функцию?** → [Руководство по контрибьюции](contribution-guide.md)
 - **Вопросы по LLM?** → [LLM интеграция](llm-integration.md)
+- **Вопросы по генерации правил?** → [Генерация правил для Modal Flow](modal-flow-rule-generation.md)
 
 ---
 
