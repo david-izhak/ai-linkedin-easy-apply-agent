@@ -77,7 +77,7 @@ ALGORITHM (deterministic):
 - Education/Certs (if explicitly required): edu_sub = 1 if all explicitly required degrees/certs are present in resume; if some missing → matched/required; if none required → 1.
 
 7) WEIGHTS (sum to 1)
-REQ_WEIGHT=0.60, OPT_WEIGHT=0.20, EXP_WEIGHT=0.15, EDU_WEIGHT=0.05
+REQ_WEIGHT=0.45, OPT_WEIGHT=0.35, EXP_WEIGHT=0.15, EDU_WEIGHT=0.05
 
 8) TOTAL SCORE
 raw = REQ_WEIGHT*req_sub + OPT_WEIGHT*opt_sub + EXP_WEIGHT*exp_sub + EDU_WEIGHT*edu_sub
