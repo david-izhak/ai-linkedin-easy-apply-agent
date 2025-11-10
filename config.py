@@ -134,7 +134,7 @@ class GeneralSettingsConfig(BaseSettings):
 class BotModeConfig(BaseSettings):
     """Configuration for the bot's operating mode."""
 
-    mode: str = Field("full_run", validation_alias="BOT_MODE")
+    mode: str = Field("full_run_submit", validation_alias="BOT_MODE")
     valid_modes: List[str] = [
         "discovery",
         "enrichment",
@@ -157,9 +157,9 @@ class BotModeConfig(BaseSettings):
 class JobLimitsConfig(BaseSettings):
     """Settings for limiting job processing (for testing/minimal runs)."""
 
-    max_jobs_to_discover: Optional[int] = 0
-    max_jobs_to_enrich: Optional[int] = 0
-    max_jobs_to_process: Optional[int] = 2
+    max_jobs_to_discover: Optional[int] = 200
+    max_jobs_to_enrich: Optional[int] = 100
+    max_jobs_to_process: Optional[int] = 30
 
 
 class PerformanceConfig(BaseSettings):
@@ -169,6 +169,7 @@ class PerformanceConfig(BaseSettings):
     max_wait_ms: int = 30000  # ms
     poll_interval_ms: int = 200  # ms
     selector_timeout: int = 5000  # ms
+    max_noncritical_consecutive_errors: int = 5
 
 
 class LLMSettings(BaseSettings):

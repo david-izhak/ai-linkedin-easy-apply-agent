@@ -1,6 +1,8 @@
 import logging
 import asyncio
 import inspect
+import os
+from datetime import datetime
 from typing import List, Sequence, Tuple
 from playwright.async_api import BrowserContext, Error as PlaywrightError, Page
 
@@ -59,8 +61,52 @@ async def _safe_close_page(page: Page | None) -> None:
         await page.close()
 
 
-async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, title: str, app_config: AppConfig) -> None:
+async def _save_error_snapshot(page: Page | None, job_id: int, link: str) -> None:
+    """Save an HTML snapshot of the page when enrichment fails.
+    
+    Args:
+        page: The Playwright page instance, if available.
+        job_id: Database identifier of the job.
+        link: URL of the job page.
+    """
+    if not page:
+        logger.debug(f"Could not save snapshot for job ID {job_id}: page is not available.")
+        return
+    
+    try:
+        is_closed_result = page.is_closed()
+        is_closed = await is_closed_result if inspect.isawaitable(is_closed_result) else bool(is_closed_result)
+        if is_closed:
+            logger.debug(f"Could not save snapshot for job ID {job_id}: page is already closed.")
+            return
+    except Exception:
+        logger.debug(f"Could not check page state for job ID {job_id}: page may be invalid.")
+        return
+
+    try:
+        html_content = await page.content()
+        
+        snapshot_dir = "logs/html_snapshots"
+        os.makedirs(snapshot_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"enrichment_error_job_{job_id}_{timestamp}.html"
+        filepath = os.path.join(snapshot_dir, filename)
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(html_content)
+            
+        logger.info(f"Saved HTML snapshot for failed job ID {job_id} (URL: {link}) to {filepath}")
+
+    except Exception as e:
+        logger.error(f"Failed to save HTML snapshot for job ID {job_id}. Error: {e}", exc_info=True)
+
+
+async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, title: str, app_config: AppConfig, noncritical_error_tracker: dict | None = None) -> bool:
     """Enrich a single job by opening its page and fetching details.
+
+    Implements retry logic with exponential backoff: 3 attempts total
+    (1 initial + 2 retries) with increasing wait times between retries.
 
     Args:
         context: The Playwright browser context to create pages from.
@@ -68,33 +114,75 @@ async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, ti
         link: URL to the job details page.
         title: Title of the job, used for logging.
         app_config: The application configuration object.
+
+    Returns:
+        bool: True if enrichment was successful, False otherwise.
     """
     logger.info(f"Enriching job: {title} (ID: {job_id})")
+    
+    max_attempts = 4
+    initial_wait_seconds = 20.0
+    exponential_base = 2
+    
     page: Page | None = None
+    
     try:
-        page = await context.new_page()
-        details = await fetch_job_details(page, link)
-        if not details:
-            raise ValueError("No details were fetched for the job.")
-        logger.info(f"Successfully scraped details for job ID {job_id}.")
+        for attempt in range(1, max_attempts + 1):
+            try:
+                # Close previous page if it exists (from retry)
+                if page:
+                    await _safe_close_page(page)
+                    page = None
+                
+                page = await context.new_page()
+                # Pass noncritical error tracker to allow systemic error detection downstream
+                details = await fetch_job_details(page, link, noncritical_error_tracker)  # type: ignore[arg-type]
+                
+                if not details:
+                    raise ValueError("No details were fetched for the job.")
+                
+                logger.info(f"Successfully scraped details for job ID {job_id} (attempt {attempt}/{max_attempts}).")
 
-        logger.debug(f"Attempting to save details for job ID {job_id} to the database.")
-        save_enrichment_data(job_id, details, app_config.session.db_conn)
-        logger.info(f"Successfully saved details for job ID {job_id}.")
+                logger.debug(f"Attempting to save details for job ID {job_id} to the database.")
+                save_enrichment_data(job_id, details, app_config.session.db_conn)
+                logger.info(f"Successfully saved details for job ID {job_id}.")
+                
+                # Success - close page and exit the retry loop
+                await _safe_close_page(page)
+                page = None
+                return True
+                
+            except (PlaywrightError, Exception) as e:  # noqa: BLE001
+                if attempt < max_attempts:
+                    # Calculate wait time with exponential backoff
+                    wait_seconds = initial_wait_seconds * (exponential_base ** (attempt - 1))
+                    logger.warning(
+                        f"Attempt {attempt}/{max_attempts} failed for job ID {job_id}. "
+                        f"Error: {e}. Retrying in {wait_seconds:.1f} seconds..."
+                    )
+                    await asyncio.sleep(wait_seconds)
+                else:
+                    # All attempts exhausted - re-raise to be handled by outer except
+                    raise
     except PlaywrightError as e:
         logger.error(
-            f"A Playwright error occurred while enriching job ID {job_id}: {e}"
+            f"All {max_attempts} attempts exhausted. A Playwright error occurred "
+            f"while enriching job ID {job_id} at URL {link}: {e}"
         )
+        await _save_error_snapshot(page, job_id, link)
         update_job_status(job_id, "enrichment_error", app_config.session.db_conn)
+        return False
     except Exception as e:  # noqa: BLE001
         logger.error(
-            f"An unexpected error occurred while enriching job ID {job_id}. Exception: {e}",
+            f"All {max_attempts} attempts exhausted. An unexpected error occurred "
+            f"while enriching job ID {job_id} at URL {link}. Exception: {e}",
             exc_info=True,
         )
+        await _save_error_snapshot(page, job_id, link)
         update_job_status(job_id, "enrichment_error", app_config.session.db_conn)
+        return False
     finally:
         await _safe_close_page(page)
-
         # Wait for a bit before processing the next job to avoid rate-limiting
         await wait(app_config.general_settings.wait_between_enrichments_ms)
 
@@ -122,8 +210,45 @@ async def run_enrichment_phase(
     limited_jobs = _limit_jobs(jobs_to_enrich, app_config)
 
     total = len(limited_jobs)
+    # Track noncritical, potentially systemic errors occurring in details fetching
+    noncritical_error_tracker: dict[str, int] = {
+        "company_link_query": 0,
+        "company_about_scrape": 0,
+    }
+    max_nc_errors = app_config.performance.max_noncritical_consecutive_errors
+    consecutive_errors = 0
+    max_consecutive_errors = 3  # Stop after 3 consecutive errors
+
     for index, (job_id, link, title, company_name) in enumerate(limited_jobs, start=1):
         logger.info(f"Processing {index}/{total}: {title} (ID: {job_id})")
-        await _enrich_single_job(browser_context, job_id, link, title, app_config)
+        
+        success = await _enrich_single_job(
+            browser_context, job_id, link, title, app_config, noncritical_error_tracker
+        )
+        
+        if success:
+            consecutive_errors = 0
+            logger.debug(f"Enrichment successful. Consecutive error count reset to 0.")
+        else:
+            consecutive_errors += 1
+            logger.warning(
+                f"Enrichment failed for job ID {job_id}. "
+                f"Consecutive error count: {consecutive_errors}/{max_consecutive_errors}"
+            )
+        
+        # Stop on systemic noncritical errors
+        if any(v >= max_nc_errors for v in noncritical_error_tracker.values()):
+            logger.error(
+                "Stopping enrichment phase due to systemic noncritical errors: %s",
+                noncritical_error_tracker,
+            )
+            break
+
+        if consecutive_errors >= max_consecutive_errors:
+            logger.error(
+                f"Stopping enrichment phase due to {max_consecutive_errors} consecutive errors. "
+                f"Processed {index}/{total} jobs before stopping."
+            )
+            break
 
     logger.info("--- Finished Enrichment Phase ---")

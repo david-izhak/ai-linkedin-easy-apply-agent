@@ -432,8 +432,14 @@ async def _scrape_company_about_page(page: Page, about_url: str) -> dict:
     return details
 
 
-async def fetch_job_details(page: Page, link: str) -> dict:
-    """Fetches all details for a given job posting."""
+async def fetch_job_details(page: Page, link: str, noncritical_error_tracker: dict | None = None) -> dict:
+    """Fetches all details for a given job posting.
+    
+    Raises:
+        Exception: If a critical error occurs during fetching (e.g., TimeoutError
+                   when navigating to company page). Non-critical errors (e.g., 
+                   missing company profile link) are logged but don't raise exceptions.
+    """
     logger.debug(f"Fetching all details for job page: {link}")
 
     full_link = construct_full_url(link)
@@ -445,21 +451,72 @@ async def fetch_job_details(page: Page, link: str) -> dict:
     # Scrape details from the company's about page
     company_about_details = {}
     try:
-        company_profile_link_element = await page.query_selector(
-            selectors["company_profile_link"]
-        )
+        try:
+            company_profile_link_element = await page.query_selector(
+                selectors["company_profile_link"]
+            )
+        except Exception as e:
+            # Non-critical: if we can't find the company link selector, just log and continue
+            logger.warning(
+                f"Could not query selector for company profile link on job page {link}. "
+                f"Exception: {e}. Continuing without company about details."
+            )
+            if noncritical_error_tracker is not None:
+                noncritical_error_tracker["company_link_query"] = noncritical_error_tracker.get("company_link_query", 0) + 1
+                logger.warning(
+                    "Noncritical error: company_link_query (%s). URL %s",
+                    noncritical_error_tracker["company_link_query"],
+                    link,
+                )
+            company_profile_link_element = None
+        
         if company_profile_link_element:
+            if noncritical_error_tracker is not None and noncritical_error_tracker.get("company_link_query", 0) > 0:
+                noncritical_error_tracker["company_link_query"] = 0
+                logger.debug("Recovered: company_link_query reset to 0")
             company_href = await company_profile_link_element.get_attribute("href")
             if company_href:
                 about_url = construct_full_url(company_href).replace("/life", "/about/")
-                company_about_details = await _scrape_company_about_page(
-                    page, about_url
-                )
+                try:
+                    company_about_details = await _scrape_company_about_page(
+                        page, about_url
+                    )
+                    if noncritical_error_tracker is not None and noncritical_error_tracker.get("company_about_scrape", 0) > 0:
+                        noncritical_error_tracker["company_about_scrape"] = 0
+                        logger.debug("Recovered: company_about_scrape reset to 0")
+                except Exception as e:
+                    # Check if this is a critical error (like TimeoutError)
+                    # that indicates a failure to fetch required data
+                    if isinstance(e, (TimeoutError, ConnectionError)):
+                        logger.error(
+                            f"Critical error occurred while scraping company 'About' page "
+                            f"for job {link}. Exception: {e}",
+                            exc_info=True,
+                        )
+                        raise
+                    else:
+                        # Non-critical error: log and continue without company about details
+                        logger.warning(
+                            f"Failed to scrape company 'About' page for job {link}. "
+                            f"Exception: {e}. Continuing without company about details."
+                        )
+                        if noncritical_error_tracker is not None:
+                            noncritical_error_tracker["company_about_scrape"] = noncritical_error_tracker.get("company_about_scrape", 0) + 1
+                            logger.warning(
+                                "Noncritical error: company_about_scrape (%s). URL %s",
+                                noncritical_error_tracker["company_about_scrape"],
+                                link,
+                            )
         else:
             logger.warning(f"Could not find company profile link on job page {link}")
+    except (TimeoutError, ConnectionError):
+        # Re-raise critical errors that indicate a failure to fetch required data
+        raise
     except Exception as e:
-        logger.error(
-            f"Failed to process company 'About' page for job {link}. Exception: {e}",
+        # This should not happen, but if it does, log and continue
+        logger.warning(
+            f"Unexpected error while processing company details for job {link}. "
+            f"Exception: {e}. Continuing without company about details.",
             exc_info=True,
         )
 
