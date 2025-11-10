@@ -24,13 +24,15 @@ class LLMGenerationError(Exception):
 
 
 class ResumeReadError(Exception):
-    """Exception raised when reading resume file fails."""
+    """Exception raised when loading candidate profile data fails."""
 
     def __init__(self, path: str, message: str | None = None):
         # We allow you to specify the message text explicitly (to comply with tests),
         # Otherwise, we use the general default message.
         self.message = (
-            message if message is not None else f"Failed to read resume file at: {path}"
+            message
+            if message is not None
+            else f"Failed to load candidate profile at: {path}"
         )
         super().__init__(self.message)
 
@@ -46,9 +48,9 @@ class VacancyNotFoundError(Exception):
 class CoverLetterGenerationError(Exception):
     """Exception thrown when there is a general error generating the cover letter."""
 
-    def __init__(self, vacancy_id: int, resume_path: str):
+    def __init__(self, vacancy_id: int, profile_path: str):
         self.message = f"Error generating cover letter for job posting {vacancy_id}"
-        super().__init__(self.message, f"Path to the resume file: {resume_path}")
+        super().__init__(self.message, f"Path to the candidate profile: {profile_path}")
 
 
 class CoverLetterSaveError(Exception):

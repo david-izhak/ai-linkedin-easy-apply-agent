@@ -37,7 +37,7 @@ def _build_llm_settings() -> LLMSettings:
 
 def _build_form_data():
     return SimpleNamespace(
-        cv_path=Path("resume.txt"),
+        cv_path=Path("test_cv.pdf"),
         cover_letter_path=None,
         delete_cover_letter_after_use=False,
     )

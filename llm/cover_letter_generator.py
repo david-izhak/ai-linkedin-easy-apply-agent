@@ -19,6 +19,7 @@ from llm.exceptions import (
 from llm.prompts import COVER_LETTER_PROMPT_STRUCTURED
 from llm.resume_utils import read_resume_text
 from llm.structured_schemas import LetterParts, join_parts
+from llm.utils import format_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ def generate_cover_letter(
     Returns:
         str: Generated cover letter
     """
-    resume_path = app_config.llm.RESUME_TXT_PATH
+    profile_path = str(app_config.modal_flow.profile_path)
 
     try:
         # We receive information about a vacancy from the database
@@ -77,7 +78,13 @@ def generate_cover_letter(
 
         # Prepare messages
         # The flags are now part of the inputs, so we can format directly.
-        prompt = COVER_LETTER_PROMPT_STRUCTURED.format(**inputs)
+        prompt = format_prompt(
+            COVER_LETTER_PROMPT_STRUCTURED,
+            **{
+                key: value if isinstance(value, str) else str(value)
+                for key, value in inputs.items()
+            },
+        )
         system_message = (
             "Output only via structured fields. "
             "No commentary or explanations outside the fields."
@@ -116,7 +123,7 @@ def generate_cover_letter(
     except (LLMGenerationError, ValidationError) as e:
         logger.error("Failed to generate cover letter even after retry.")
         raise CoverLetterGenerationError(
-            vacancy_id=job_id, resume_path=resume_path
+            vacancy_id=job_id, profile_path=profile_path
         ) from e
     except (ResumeReadError, VacancyNotFoundError):
         raise
@@ -125,7 +132,7 @@ def generate_cover_letter(
             f"Unexpected error during cover letter generation for vacancy {job_id}: {str(e)}"
         )
         raise CoverLetterGenerationError(
-            vacancy_id=job_id, resume_path=resume_path
+            vacancy_id=job_id, profile_path=profile_path
         ) from e
 
 

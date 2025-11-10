@@ -136,10 +136,11 @@ LLM_PROVIDER="openai"
 LLM_MODEL="gpt-4-turbo"
 LLM_API_KEY="sk-..."
 LLM_THRESHOLD_PERCENTAGE=70
-RESUME_TXT_PATH="resume.txt"
 LLM_TIMEOUT=60
 LLM_MAX_RETRIES=3
 ```
+
+Текстовая информация о кандидате загружается из `config/profile_example.json`. Обновите этот файл под свой профиль или настройте путь в `ModalFlowConfig.profile_path` (`config.py`).
 
 **Поддерживаемые провайдеры:**
 - `openai` - OpenAI GPT модели

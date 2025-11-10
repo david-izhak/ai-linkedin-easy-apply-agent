@@ -9,6 +9,7 @@ from llm.schemas import MatchResult
 from core.database import get_db_connection, get_vacancy_by_id, save_skill_match_data
 from llm.resume_utils import read_resume_text
 from llm.client_factory import get_llm_client
+from llm.utils import format_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,8 @@ def calculate_skill_match(
     All JSON parsing logic has been removed in favor of structured output.
     """
     llm_client = get_llm_client(app_config.llm)
-    prompt = VACANCY_MATCH_PROMPT.format(
+    prompt = format_prompt(
+        VACANCY_MATCH_PROMPT,
         vacancy_description=vacancy_description,
         resume_text=resume_text,
     )
@@ -80,15 +82,15 @@ async def is_vacancy_suitable(
 
     Raises:
         VacancyNotFoundError: If the vacancy was not found.
-        ResumeReadError: If the resume could not be read.
+        ResumeReadError: If the candidate profile could not be loaded.
         Exception: For other system errors (e.g., LLM unavailable).
     """
     logger.debug(f"Call to function '{__name__}' started.")
-    resume_path = app_config.llm.RESUME_TXT_PATH
+    profile_path = str(app_config.modal_flow.profile_path)
 
     log_extra = {
         "vacancy_id": vacancy_id,
-        "resume_path": resume_path,
+        "profile_path": profile_path,
     }
 
     try:
@@ -149,7 +151,7 @@ async def is_vacancy_suitable(
     except ResumeReadError as e:
         log_extra["result_status"] = "resume_read_error"
         logger.error(
-            f"Error reading resume for a job vacancy {vacancy_id}",
+            f"Error loading candidate profile for vacancy {vacancy_id}",
             extra=log_extra,
             exc_info=e,
         )

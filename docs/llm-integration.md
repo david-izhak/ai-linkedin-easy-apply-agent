@@ -91,10 +91,10 @@ def get_llm_client() -> LLMClient:
 - `LLM_API_KEY`: API-ключ (обязателен для OpenAI/Anthropic)
 - `LLM_BASE_URL`: URL для локальных моделей (Ollama)
 - `LLM_THRESHOLD_PERCENTAGE`: Порог совпадения (0-100)
-- `RESUME_TXT_PATH`: Путь к резюме
 - `LLM_TIMEOUT`: Таймаут запросов (по умолчанию 60)
 - `LLM_MAX_RETRIES`: Максимальное число ретраев (по умолчанию 3)
 - `LLM_TEMPERATURE`: Температура выборки (по умолчанию 0.0)
+- Профиль кандидата: `ModalFlowConfig.profile_path` (по умолчанию `config/profile_example.json`)
 
 #### `prompts.py`
 **Назначение:** Шаблоны промптов для LLM
@@ -115,13 +115,13 @@ def get_llm_client() -> LLMClient:
 
 #### `resume_utils.py`
 **Функция:** `read_resume_text()`  
-**Назначение:** Чтение текста резюме из файла
+**Назначение:** Загрузка профиля кандидата из JSON (`ModalFlowConfig.profile_path`) и подготовка данных для промптов
 
 #### `exceptions.py`
 **Исключения:**
 - `LLMError`: Базовое исключение
 - `VacancyNotFoundError`: Вакансия не найдена
-- `ResumeReadError`: Ошибка чтения резюме
+- `ResumeReadError`: Ошибка загрузки профиля
 - `LLMGenerationError`: Ошибка генерации LLM
 - `CoverLetterGenerationError`: Ошибка генерации письма
 - `CoverLetterSaveError`: Ошибка сохранения письма
@@ -255,14 +255,13 @@ LLM_THRESHOLD_PERCENTAGE=70     # Порог совпадения (0-100)
 LLM_API_KEY=""                  # API-ключ (обязателен для openai/anthropic)
 LLM_BASE_URL="http://localhost:11434"  # URL для Ollama
 
-# Файлы
-RESUME_TXT_PATH="resume.txt"    # Путь к текстовому резюме
-
 # Параметры запросов
 LLM_TIMEOUT=60                  # Таймаут запросов (секунды)
 LLM_MAX_RETRIES=3               # Максимальное число ретраев
 LLM_TEMPERATURE=0.0             # Температура выборки (0.0 = детерминированно)
 ```
+
+> Профиль кандидата загружается из `ModalFlowConfig.profile_path` (по умолчанию `config/profile_example.json`). Обновите этот JSON, чтобы LLM использовал свежие данные.
 
 ### Валидации
 

@@ -73,7 +73,7 @@ class JobSearchConfig(BaseSettings):
     keywords: str = "Software Engineer"
     geo_id: str = "118490091"
     distance: str = "20"
-    job_search_period_seconds: int = 2592000  # 30 days in seconds
+    job_search_period_seconds: int = 2592000  # 30 days in seconds / 7 days = 604800 / 2 days = 172800 / 1 day = 86400
     sort_by: str = "DD"  # DD = Date Descending, R = Relevance
     job_title_regex: str = r"(?i)^(?!.*(rust|laravel|php|junior|angular|driver|go(lang)|architect|qa|unity|technical|lead|teamlead|devops|salesforce|technology|llm|embedded|hardware|android|firmware|c\+\+|\.net|c#)).*?(automation|staff|sw|solution(s)|software|java|python|data|back\s*end|ai|chatbot|principal|full\s*stack|senior).*?.*?(developer|engineer).*$"
     job_description_regex: str = r".*"
@@ -134,7 +134,7 @@ class GeneralSettingsConfig(BaseSettings):
 class BotModeConfig(BaseSettings):
     """Configuration for the bot's operating mode."""
 
-    mode: str = Field("full_run_submit", validation_alias="BOT_MODE")
+    mode: str = Field("processing", validation_alias="BOT_MODE")
     valid_modes: List[str] = [
         "discovery",
         "enrichment",
@@ -157,9 +157,9 @@ class BotModeConfig(BaseSettings):
 class JobLimitsConfig(BaseSettings):
     """Settings for limiting job processing (for testing/minimal runs)."""
 
-    max_jobs_to_discover: Optional[int] = 200
-    max_jobs_to_enrich: Optional[int] = 100
-    max_jobs_to_process: Optional[int] = 30
+    max_jobs_to_discover: Optional[int] = 0
+    max_jobs_to_enrich: Optional[int] = 0
+    max_jobs_to_process: Optional[int] = 2
 
 
 class PerformanceConfig(BaseSettings):
@@ -195,7 +195,6 @@ class LLMSettings(BaseSettings):
     LLM_PROVIDER: str = "openai"
     LLM_MODEL: str = "ep-4rgm7z-1761497796779465664"
     LLM_THRESHOLD_PERCENTAGE: int = 70
-    RESUME_TXT_PATH: str = "resume.txt"
     LLM_TIMEOUT: int = 300
     LLM_MAX_RETRIES: int = 3
     LLM_BASE_URL: Optional[

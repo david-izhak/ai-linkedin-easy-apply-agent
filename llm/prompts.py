@@ -16,7 +16,33 @@ ALGORITHM (deterministic):
 - Lowercase all text, remove diacritics, trim spaces.
 - Split skills on commas, semicolons, slashes, pipes, and newlines; also detect common multi-word tech phrases.
 - Canonicalize tokens using the fixed synonyms map (apply left→right):
-  {{"java":"javascript","ts":"typescript","py":"python","postgres":"postgresql","ms sql":"sql server","k8s":"kubernetes","ci/cd":"cicd","aws":"amazon web services","gcp":"google cloud platform","azure":"microsoft azure","s3":"aws s3","eks":"aws eks","gke":"google kubernetes engine","aks":"azure kubernetes service","db":"database","oop":"object oriented programming","rest api":"rest","dotnet":".net","node":"node.js","reactjs":"react","js":"javascript","pg":"postgresql","mongo":"mongodb","mq":"message queue","spark":"apache spark"}}
+  {{
+  "java":"javascript",
+  "ts":"typescript",
+  "py":"python",
+  "postgres":"postgresql",
+  "ms sql":"sql server",
+  "k8s":"kubernetes",
+  "ci/cd":"cicd",
+  "aws":"amazon web services",
+  "gcp":"google cloud platform",
+  "azure":"microsoft azure",
+  "s3":"aws s3",
+  "eks":"aws eks",
+  "gke":"google kubernetes engine",
+  "aks":"azure kubernetes service",
+  "db":"database",
+  "oop":"object oriented programming",
+  "rest api":"rest",
+  "dotnet":".net",
+  "node":"node.js",
+  "reactjs":"react",
+  "js":"javascript",
+  "pg":"postgresql",
+  "mongo":"mongodb",
+  "mq":"message queue",
+  "spark":"apache spark"
+  }}
 - After mapping, deduplicate skills. Sort lists alphabetically before scoring.
 
 2) EXTRACT REQUIREMENTS FROM JOB
