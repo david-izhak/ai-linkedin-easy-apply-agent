@@ -671,8 +671,16 @@ class RulesEngine:
         if decision is None:
             return True
         
+        # For checkbox fields, boolean values (True/False) are always valid
+        if field_type == "checkbox" and isinstance(decision, bool):
+            return False  # Boolean values are valid for checkboxes
+        
         # Convert to string for validation
-        decision_str = str(decision).strip() if decision else ""
+        # Use explicit None check to avoid treating False as falsy
+        if decision is None:
+            decision_str = ""
+        else:
+            decision_str = str(decision).strip()
         
         # Empty string is invalid
         if not decision_str:
