@@ -609,42 +609,6 @@ rules:
       - 'Yes'
 - constraints:
     required: true
-  id: rls_1762800787
-  meta:
-    confidence: 0.95
-    created_at: '2025-11-10T18:53:07Z'
-    hits: 0
-    last_seen: null
-    source: llm
-  scope:
-    form_kind: job_apply
-    locale:
-    - en
-    site: '*'
-  signature:
-    field_type: select
-    options_fingerprint: sha1:aa5340a0cdc6233c3841b13ae801faa36b6f784d
-    q_pattern: (native|родной).*?(?P<language>hebrew|иврит|english|английский|russian|русский)
-      speaker
-  strategy:
-    kind: one_of_options_from_profile
-    params:
-      key: languages[0].language
-      synonyms:
-        English:
-        - English
-        - english
-        - английский
-        Hebrew:
-        - Hebrew
-        - hebrew
-        - иврит
-        Russian:
-        - Russian
-        - russian
-        - русский
-- constraints:
-    required: true
   id: rls_1762800793
   meta:
     confidence: 1.0
@@ -690,10 +654,10 @@ rules:
       - 'Yes'
 - constraints:
     required: true
-  id: rls_1762800831
+  id: rls_1762800831  # Используем более поздний ID или создаем новый
   meta:
     confidence: 0.95
-    created_at: '2025-11-10T18:53:51Z'
+    created_at: '2025-11-10T18:53:51Z'  # Более поздняя дата
     hits: 0
     last_seen: null
     source: llm
@@ -704,8 +668,8 @@ rules:
     site: '*'
   signature:
     field_type: select
-    options_fingerprint: sha1:aa5340a0cdc6233c3841b13ae801faa36b6f784d
-    q_pattern: (native|родной).*?(?P<language>hebrew|иврит|english|английский|russian|русский).*?(speaker|говорящий)
+    options_fingerprint: null
+    q_pattern: (native|родной).*?(?P<language>hebrew|иврит|english|английский|russian|русский).*?(speaker|говорящий)?
   strategy:
     kind: one_of_options_from_profile
     params:
@@ -715,14 +679,21 @@ rules:
         - English
         - english
         - английский
+        - en
+        - En
         Hebrew:
         - Hebrew
         - hebrew
         - иврит
+        - he
+        - He
+        - Heb
         Russian:
         - Russian
         - russian
         - русский
+        - ru
+        - Ru
 - constraints:
     required: true
   id: rls_1762820611
@@ -806,7 +777,7 @@ rules:
   signature:
     field_type: checkbox
     options_fingerprint: null
-    q_pattern: (corp|business|strategy)
+    q_pattern: (?=.*corp|business)(?=.*strategy).*
   strategy:
     kind: literal
     params:
@@ -1004,7 +975,7 @@ rules:
   signature:
     field_type: checkbox
     options_fingerprint: null
-    q_pattern: (information|security)
+    q_pattern: (?=.*information)(?=.*security).*
   strategy:
     kind: literal
     params:
@@ -1026,7 +997,7 @@ rules:
   signature:
     field_type: checkbox
     options_fingerprint: null
-    q_pattern: (engineering|software)
+    q_pattern: (?=.*engineering)(?=.*software).*
   strategy:
     kind: literal
     params:
@@ -1052,7 +1023,7 @@ rules:
   strategy:
     kind: literal
     params:
-      value: true
+      value: false
 - constraints:
     required: true
   id: rls_1762820762
@@ -1070,7 +1041,7 @@ rules:
   signature:
     field_type: checkbox
     options_fingerprint: null
-    q_pattern: (data|informatics)
+    q_pattern: (?=.*data)(?=.*informatics).*
   strategy:
     kind: literal
     params:
@@ -1092,7 +1063,7 @@ rules:
   signature:
     field_type: checkbox
     options_fingerprint: null
-    q_pattern: (product|management)
+    q_pattern: (?=.*product)(?=.*management).*
   strategy:
     kind: literal
     params:
@@ -1114,7 +1085,7 @@ rules:
   signature:
     field_type: checkbox
     options_fingerprint: null
-    q_pattern: (quality|assurance)
+    q_pattern: (?=.*quality)(?=.*assurance).*
   strategy:
     kind: literal
     params:
@@ -1136,7 +1107,7 @@ rules:
   signature:
     field_type: checkbox
     options_fingerprint: null
-    q_pattern: (technical|writing)
+    q_pattern: (?=.*technical)(?=.*writing).*
   strategy:
     kind: literal
     params:
@@ -1180,7 +1151,7 @@ rules:
   signature:
     field_type: checkbox
     options_fingerprint: null
-    q_pattern: (resident|engineer)
+    q_pattern: (?=.*resident)(?=.*engineer).*
   strategy:
     kind: literal
     params:
@@ -1202,7 +1173,7 @@ rules:
   signature:
     field_type: checkbox
     options_fingerprint: null
-    q_pattern: (customer|success)
+    q_pattern: (?=.*customer)(?=.*success).*
   strategy:
     kind: literal
     params:
@@ -1228,7 +1199,7 @@ rules:
   strategy:
     kind: literal
     params:
-      value: Not Applicable
+      value: Not
 - constraints:
     required: true
   id: rls_1762820865
@@ -1297,7 +1268,7 @@ rules:
   signature:
     field_type: checkbox
     options_fingerprint: null
-    q_pattern: (service|account|manager)
+    q_pattern: (?=.*service|account)(?=.*manager).*
   strategy:
     kind: literal
     params:
@@ -1419,28 +1390,6 @@ rules:
       - 'No'
 - constraints:
     required: true
-  id: rls_1762884662
-  meta:
-    confidence: 1.0
-    created_at: '2025-11-11T18:11:02Z'
-    hits: 0
-    last_seen: null
-    source: llm
-  scope:
-    form_kind: job_apply
-    locale:
-    - en
-    site: '*'
-  signature:
-    field_type: checkbox
-    options_fingerprint: null
-    q_pattern: (areas? of work|areas? of interest|сфер[аы].*работ[ыа]|интересн[ыеая].*сфер[аы])
-  strategy:
-    kind: literal
-    params:
-      value: true
-- constraints:
-    required: true
   id: rls_1762884678
   meta:
     confidence: 0.95
@@ -1479,13 +1428,19 @@ rules:
   signature:
     field_type: select
     options_fingerprint: sha1:fa29ee51be80bd5985f07029ff5d48fb95fd1f67
-    q_pattern: (previously|earlier).*?(worked|employed).*?(for|at).*?(?P<company>palo
-      alto networks|пало альто нетворкс)
+    q_pattern: .*?(previously|earlier).*?(worked|employed).*?(for|at).*?
   strategy:
     kind: one_of_options
     params:
       preferred:
-      - No - I have not worked for Palo Alto Networks
+      - 'no'
+      synonyms:
+        'no':
+        - 'No'
+        - Нет
+        - 'no'
+        - No - I have not worked for
+        - I have not worked for
 - constraints:
     required: true
   id: rls_1762884705
