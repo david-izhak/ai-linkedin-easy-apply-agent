@@ -164,7 +164,7 @@ class ModalFlowRunner:
                 modal_text_preview = modal_text[:200] + "..." if len(modal_text) > 200 else modal_text
                 self.logger.info(f"[MODAL_FLOW_STEP] Modal content preview: {modal_text_preview}")
                 
-                current_progress_percentage = await self._extract_progress_percentage_from_text(modal_text)
+                current_progress_percentage = self._extract_progress_percentage_from_text(modal_text)
                 if current_progress_percentage is not None:
                     self.logger.info(f"[PROGRESS] Current dialog progress: {current_progress_percentage}%")
                     if previous_progress_percentage is not None:
@@ -1728,6 +1728,14 @@ class ModalFlowRunner:
                 return dom_walk_label.strip()
         except Exception:
             pass
+        
+        # Try to extract label from preceding siblings by walking up DOM tree
+        try:
+            sibling_label = await self._extract_label_from_siblings(element)
+            if sibling_label and sibling_label.strip():
+                return sibling_label.strip()
+        except Exception as e:
+            self.logger.debug(f"Failed to extract label from siblings: {e}")
             
         # Last resort: return "field" but log a warning
         try:
@@ -1745,6 +1753,158 @@ class ModalFlowRunner:
         except Exception:
             self.logger.warning("Could not extract label for element. Using fallback 'field'.")
         return "field"
+    
+    async def _extract_label_from_siblings(self, element: Locator) -> str:
+        """
+        Extract label by walking up DOM tree and collecting text from preceding siblings.
+        
+        This method:
+        1. Walks up to 6 levels from the input element
+        2. At each level, collects all preceding siblings
+        3. Extracts all text from each sibling at any depth
+        4. Filters texts (length, error markers, input value matches)
+        5. Combines texts from siblings at the same level through ". "
+        6. Groups candidates by distance and selects minimum distance
+        7. Combines texts from all candidates with minimum distance
+        
+        Args:
+            element: Element locator (input field)
+            
+        Returns:
+            Combined label text or empty string
+        """
+        return await element.evaluate("""
+            (el) => {
+                function extractAllText(node) {
+                    // Skip script, style, and hidden elements
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        return node.textContent.trim();
+                    }
+                    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+                    
+                    const tagName = node.tagName.toLowerCase();
+                    if (tagName === 'script' || tagName === 'style') return '';
+                    
+                    // Check if element is hidden
+                    const style = window.getComputedStyle(node);
+                    if (style.display === 'none' || style.visibility === 'hidden') {
+                        return '';
+                    }
+                    
+                    // Recursively extract text from all children
+                    let text = '';
+                    for (let child of node.childNodes) {
+                        text += ' ' + extractAllText(child);
+                    }
+                    return text.trim();
+                }
+                
+                function cleanText(text) {
+                    if (!text) return '';
+                    return text.replace(/\\s+/g, ' ').trim();
+                }
+                
+                function isValidLabelText(text, inputEl) {
+                    if (!text || text.length === 0) return false;
+                    if (text.length > 200) return false;
+                    
+                    const lowerText = text.toLowerCase();
+                    const errorMarkers = ['error', 'invalid', 'required', 'please enter'];
+                    if (errorMarkers.some(marker => lowerText.includes(marker))) {
+                        return false;
+                    }
+                    
+                    const inputValue = (inputEl.value || inputEl.placeholder || '').trim();
+                    if (inputValue && text.toLowerCase() === inputValue.toLowerCase()) {
+                        return false;
+                    }
+                    
+                    return true;
+                }
+                
+                function removeDuplicates(texts) {
+                    const seen = new Set();
+                    const unique = [];
+                    for (let text of texts) {
+                        const normalized = text.toLowerCase().trim();
+                        if (normalized && !seen.has(normalized)) {
+                            seen.add(normalized);
+                            unique.push(text);
+                        }
+                    }
+                    return unique;
+                }
+                
+                let current = el;
+                const candidates = [];
+                
+                // Walk up to 6 levels
+                for (let level = 1; level <= 6; level++) {
+                    if (!current || !current.parentElement) break;
+                    
+                    const parent = current.parentElement;
+                    const siblings = Array.from(parent.children);
+                    
+                    // Find index of element containing input
+                    let inputIndex = -1;
+                    for (let i = 0; i < siblings.length; i++) {
+                        if (siblings[i].contains(el) || siblings[i] === current) {
+                            inputIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    if (inputIndex <= 0) {
+                        current = parent;
+                        continue;
+                    }
+                    
+                    // Collect all preceding siblings
+                    const precedingSiblings = siblings.slice(0, inputIndex);
+                    const texts = [];
+                    
+                    for (let sibling of precedingSiblings) {
+                        const text = extractAllText(sibling);
+                        const cleanedText = cleanText(text);
+                        
+                        if (isValidLabelText(cleanedText, el)) {
+                            texts.push(cleanedText);
+                        }
+                    }
+                    
+                    if (texts.length > 0) {
+                        const combinedText = texts.join('. ');
+                        candidates.push({
+                            text: combinedText,
+                            level: level,
+                            distance: inputIndex
+                        });
+                    }
+                    
+                    current = parent;
+                }
+                
+                if (candidates.length === 0) {
+                    return '';
+                }
+                
+                // Find minimum distance
+                const minDistance = Math.min(...candidates.map(c => c.distance));
+                
+                // Select all candidates with minimum distance
+                const bestCandidates = candidates.filter(c => c.distance === minDistance);
+                
+                // Combine their texts through ". "
+                const combinedLabels = bestCandidates
+                    .map(c => c.text)
+                    .filter(t => t && t.length > 0);
+                
+                // Remove duplicates (if same text found on different levels)
+                const uniqueLabels = removeDuplicates(combinedLabels);
+                
+                return uniqueLabels.join('. ');
+            }
+        """)
     
     async def _wait_for_spinners_to_disappear(self, timeout: int = 5000):
         """Wait for all loading spinners to disappear."""
