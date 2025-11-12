@@ -1,6 +1,9 @@
 selectors = {
     # "easy_apply_button_enabled": "button.jobs-apply-button:enabled", # outdated
-    "easy_apply_button": "div.jobs-apply-button--top-card button", # резервный вариант поиска кнопки
+    "easy_apply_button": 'a[data-view-name="job-apply-button"]:has-text("Easy Apply")',  # Основной селектор
+    "easy_apply_button_fallback_1": 'a[data-view-name="job-apply-button"]',  # Фолбек 1: без текста
+    "easy_apply_button_fallback_2": 'a[href*="/apply"]:has-text("Easy Apply")',  # Фолбек 2: по href
+    "easy_apply_button_fallback_3": "div.jobs-apply-button--top-card button",  # Фолбек 3: старый селектор
     # "easy_apply_button": 'button:has-text("Easy Apply"):not([aria-label*="{:companyName}"])',
 
     # Job search form

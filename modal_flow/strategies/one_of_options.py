@@ -78,9 +78,13 @@ class OneOfOptionsStrategy(BaseStrategy):
                 )
             return None
         
-        # Only return first option if no synonyms/preferred specified (backward compatibility)
-        # This maintains backward compatibility for rules that don't specify synonyms
-        return options[0] if options else None
+        # No preferred options were provided — delegate decision upstream (e.g. to LLM)
+        if self.logger:
+            self.logger.debug(
+                "OneOfOptionsStrategy: No preferred values specified; "
+                "delegating decision to fallback handlers."
+            )
+        return None
 
 
 class OneOfOptionsFromProfileStrategy(BaseStrategy):

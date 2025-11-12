@@ -251,6 +251,7 @@ class ModalFlowConfig(BaseSettings):
     normalizer_rules_path: Optional[Path] = Path("config/normalizer_rules.yaml")
     max_steps: int = 16
     llm_delegate_enabled: bool = True
+    capture_screenshots: bool = False
     learning: ModalFlowLearningSettings = ModalFlowLearningSettings()
 
 

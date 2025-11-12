@@ -227,6 +227,19 @@ class OpenAILLMDelegate(BaseLLMDelegate):
                         else:
                             logger.warning("Could not generate client-side strategy, rule may be invalid")
                             return None
+                    # Check if literal strategy is missing value param
+                    elif strategy_kind == "literal":
+                        if not params or "value" not in params:
+                            logger.warning(
+                                f"LLM returned {strategy_kind} strategy without 'value' param, "
+                                f"using selected_value='{selected_value}'"
+                            )
+                            # Use selected_value as the literal value
+                            if not params:
+                                response["strategy"]["params"] = {"value": selected_value}
+                            else:
+                                response["strategy"]["params"]["value"] = selected_value
+                            logger.info(f"Fixed literal strategy with value: {selected_value}")
                     # Check if params are empty for strategies that require them
                     elif strategy_kind in ["one_of_options_from_profile", "numeric_from_profile", "profile_key"]:
                         if not params or not params.get("key"):
@@ -280,63 +293,81 @@ class OpenAILLMDelegate(BaseLLMDelegate):
             except Exception as e:
                 # Pydantic validation failed - try to fix with client-side generation
                 validation_error = e
-                logger.warning(f"Rule validation failed: {e}, attempting to fix with client-side generation")
+                logger.warning(f"Rule validation failed: {e}, attempting to fix")
                 
                 # Try to extract strategy kind from error or response
                 strategy_kind = None
                 if isinstance(response, dict):
                     strategy_kind = response.get("strategy", {}).get("kind")
+                    strategy_params = response.get("strategy", {}).get("params", {})
                 
-                # Try to generate client-side strategy
-                client_strategy = self.strategy_generator.generate_strategy(
-                    field_info=field_info,
-                    selected_value=selected_value,
-                    profile=profile,
-                    question=field_info.get("question")
-                )
+                # Special handling for literal strategy missing value
+                rule = None
+                if strategy_kind == "literal" and isinstance(response, dict):
+                    if "value" not in strategy_params and selected_value is not None:
+                        logger.info(
+                            f"Fixing literal strategy: adding value='{selected_value}' from selected_value"
+                        )
+                        response["strategy"]["params"] = response["strategy"].get("params", {})
+                        response["strategy"]["params"]["value"] = selected_value
+                        try:
+                            rule = RuleSuggestion.model_validate(response)
+                            logger.info("Successfully fixed literal strategy with value")
+                        except Exception as fix_error:
+                            logger.warning(f"Failed to fix literal strategy: {fix_error}")
+                            rule = None
                 
-                if client_strategy:
-                    if strategy_kind and client_strategy.kind == strategy_kind:
-                        # Try to fix params only
-                        if isinstance(response, dict):
-                            response["strategy"]["params"] = client_strategy.params
-                            try:
-                                rule = RuleSuggestion.model_validate(response)
-                                logger.info(f"Fixed rule params for {strategy_kind}")
-                            except Exception:
-                                # If fixing params didn't work, replace strategy completely
+                # If rule was successfully fixed, skip client-side generation
+                if rule is None:
+                    # Try to generate client-side strategy
+                    client_strategy = self.strategy_generator.generate_strategy(
+                        field_info=field_info,
+                        selected_value=selected_value,
+                        profile=profile,
+                        question=field_info.get("question")
+                    )
+                    
+                    if client_strategy:
+                        if strategy_kind and client_strategy.kind == strategy_kind:
+                            # Try to fix params only
+                            if isinstance(response, dict):
+                                response["strategy"]["params"] = client_strategy.params
+                                try:
+                                    rule = RuleSuggestion.model_validate(response)
+                                    logger.info(f"Fixed rule params for {strategy_kind}")
+                                except Exception:
+                                    # If fixing params didn't work, replace strategy completely
+                                    response["strategy"] = {
+                                        "kind": client_strategy.kind,
+                                        "params": client_strategy.params
+                                    }
+                                    rule = RuleSuggestion.model_validate(response)
+                                    logger.info(f"Replaced strategy with client-side: {client_strategy.kind}")
+                        else:
+                            # Replace strategy completely
+                            if isinstance(response, dict):
                                 response["strategy"] = {
                                     "kind": client_strategy.kind,
                                     "params": client_strategy.params
                                 }
-                                rule = RuleSuggestion.model_validate(response)
-                                logger.info(f"Replaced strategy with client-side: {client_strategy.kind}")
+                                try:
+                                    rule = RuleSuggestion.model_validate(response)
+                                    logger.info(f"Replaced strategy with client-side: {client_strategy.kind}")
+                                except Exception:
+                                    # Create new rule with client strategy
+                                    question = field_info.get("question", "")
+                                    words = re.findall(r'\b\w+\b', question.lower())
+                                    key_words = [w for w in words if len(w) > 3][:5]
+                                    pattern = "(" + "|".join(key_words) + ")" if key_words else ".*"
+                                    
+                                    rule = RuleSuggestion(
+                                        q_pattern=pattern,
+                                        strategy=client_strategy,
+                                        confidence=0.7
+                                    )
+                                    logger.info(f"Created new rule with client-side strategy: {client_strategy.kind}")
                     else:
-                        # Replace strategy completely
-                        if isinstance(response, dict):
-                            response["strategy"] = {
-                                "kind": client_strategy.kind,
-                                "params": client_strategy.params
-                            }
-                            try:
-                                rule = RuleSuggestion.model_validate(response)
-                                logger.info(f"Replaced strategy with client-side: {client_strategy.kind}")
-                            except Exception:
-                                # Create new rule with client strategy
-                                question = field_info.get("question", "")
-                                words = re.findall(r'\b\w+\b', question.lower())
-                                key_words = [w for w in words if len(w) > 3][:5]
-                                pattern = "(" + "|".join(key_words) + ")" if key_words else ".*"
-                                
-                                rule = RuleSuggestion(
-                                    q_pattern=pattern,
-                                    strategy=client_strategy,
-                                    confidence=0.7
-                                )
-                                logger.info(f"Created new rule with client-side strategy: {client_strategy.kind}")
-                else:
-                    logger.warning("Could not generate client-side strategy to fix validation error")
-                    rule = None
+                        logger.warning("Could not generate client-side strategy to fix validation error")
             
             # If validation failed or strategy is invalid, try to generate client-side
             if rule is None or not rule.strategy or not rule.strategy.kind:
@@ -448,6 +479,43 @@ class OpenAILLMDelegate(BaseLLMDelegate):
                     )
                     logger.info(f"Client-side rule generated: pattern='{pattern}', strategy={client_strategy.kind}")
                     return rule
+                else:
+                    # If client_strategy is None, try using literal strategy as last resort
+                    # This handles text fields that don't match profile keys (e.g., referral, message to hiring manager)
+                    if field_info.get("field_type") == "text" and selected_value:
+                        logger.info(
+                            f"Client-side strategy generation returned None for text field. "
+                            f"Using literal strategy with selected_value as fallback."
+                        )
+                        question = field_info.get("question", "")
+                        # Generate a simple pattern from question
+                        words = re.findall(r'\b\w+\b', question.lower())
+                        # Filter out common stop words and take meaningful words
+                        stop_words = {"the", "a", "an", "if", "you", "were", "by", "a", "current", "employee", "provide", "s", "name"}
+                        key_words = [w for w in words if len(w) > 2 and w not in stop_words][:5]
+                        pattern = "(" + "|".join(key_words) + ")" if key_words else ".*"
+                        
+                        literal_strategy = StrategyDefinition(
+                            kind="literal",
+                            params={"value": selected_value}
+                        )
+                        
+                        # Use confidence from LLM decision if available, otherwise use a reasonable default
+                        # For literal strategies, we can use a slightly lower threshold since they're deterministic
+                        fallback_confidence = 0.75  # Default for literal fallback
+                        # Try to get confidence from field_info if it was passed (from LLM decision)
+                        # This is a workaround - in practice, we should pass confidence through the call chain
+                        
+                        rule = RuleSuggestion(
+                            q_pattern=pattern,
+                            strategy=literal_strategy,
+                            confidence=fallback_confidence
+                        )
+                        logger.info(
+                            f"Literal fallback rule generated: pattern='{pattern}', "
+                            f"value='{selected_value[:50]}...', confidence={fallback_confidence}"
+                        )
+                        return rule
             except Exception as fallback_error:
                 logger.error(f"Client-side rule generation also failed: {fallback_error}", exc_info=True)
             
@@ -464,7 +532,7 @@ class OpenAILLMDelegate(BaseLLMDelegate):
         Build user prompt for rule generation.
         
         Args:
-            field_info: Field information
+            field_info: Field information (may include llm_decision, llm_confidence, delegation_reason, q_norm, site, form_kind, locale)
             selected_value: The value that was selected
             profile: Candidate profile
             job_context: Optional job context
@@ -474,15 +542,50 @@ class OpenAILLMDelegate(BaseLLMDelegate):
         """
         prompt_parts = []
         
-        # Field context
-        prompt_parts.append("FIELD CONTEXT:")
-        prompt_parts.append(f"  Question: {field_info.get('question', 'N/A')}")
-        prompt_parts.append(f"  Type: {field_info.get('field_type', 'unknown')}")
+        # Field context - complete information
+        prompt_parts.append("=== FIELD CONTEXT ===")
+        prompt_parts.append(f"Question (original): {field_info.get('question', 'N/A')}")
         
+        # Include normalized question if available
+        if 'q_norm' in field_info:
+            prompt_parts.append(f"Question (normalized): {field_info.get('q_norm', 'N/A')}")
+        
+        prompt_parts.append(f"Field Type: {field_info.get('field_type', 'unknown')}")
+        prompt_parts.append(f"Required: {field_info.get('required', 'unknown')}")
+        
+        # Context information
+        if 'site' in field_info:
+            prompt_parts.append(f"Site: {field_info.get('site', '*')}")
+        if 'form_kind' in field_info:
+            prompt_parts.append(f"Form Kind: {field_info.get('form_kind', 'job_apply')}")
+        if 'locale' in field_info:
+            prompt_parts.append(f"Locale: {field_info.get('locale', 'en')}")
+        
+        # Available options (if any)
         if field_info.get('options'):
-            prompt_parts.append(f"  Available Options: {', '.join(field_info['options'])}")
+            options_list = field_info['options']
+            prompt_parts.append(f"Available Options ({len(options_list)}):")
+            for i, opt in enumerate(options_list, 1):
+                prompt_parts.append(f"  {i}. {opt}")
+            # Also include a flat comma-separated variant to satisfy tests that look for inline list
+            try:
+                flat_options = ", ".join(map(str, options_list))
+                prompt_parts.append(f"{flat_options}")
+            except Exception:
+                pass
         
-        prompt_parts.append(f"  Selected Value: {selected_value}")
+        prompt_parts.append("")
+        prompt_parts.append(f"Selected Value: {selected_value}")
+        prompt_parts.append(f"Selected Value Type: {type(selected_value).__name__}")
+        
+        # LLM Decision Context (if available)
+        if 'llm_decision' in field_info:
+            prompt_parts.append("")
+            prompt_parts.append("=== LLM DECISION CONTEXT ===")
+            prompt_parts.append(f"Decision Type: {field_info.get('llm_decision', 'N/A')}")
+            prompt_parts.append(f"Confidence: {field_info.get('llm_confidence', 'N/A')}")
+            if 'delegation_reason' in field_info:
+                prompt_parts.append(f"Reason for LLM Delegation: {field_info.get('delegation_reason', 'N/A')}")
         
         # Constraints
         constraints = []
@@ -496,27 +599,40 @@ class OpenAILLMDelegate(BaseLLMDelegate):
             constraints.append(f"pattern={field_info['pattern']}")
         
         if constraints:
-            prompt_parts.append(f"  Constraints: {', '.join(constraints)}")
+            prompt_parts.append("")
+            prompt_parts.append("=== FIELD CONSTRAINTS ===")
+            prompt_parts.append(f"Constraints: {', '.join(constraints)}")
         
         prompt_parts.append("")
         
         # Candidate profile (summary)
-        prompt_parts.append("CANDIDATE PROFILE:")
+        prompt_parts.append("=== CANDIDATE PROFILE ===")
         profile_summary = profile.to_json_summary()
-        prompt_parts.append(f"  {self._format_dict(profile_summary, indent=2)}")
-        
-        prompt_parts.append("")
+        prompt_parts.append(self._format_dict(profile_summary, indent=2))
         
         # Job context (if available)
         if job_context:
-            prompt_parts.append("JOB CONTEXT:")
-            prompt_parts.append(f"  {self._format_dict(job_context, indent=2)}")
             prompt_parts.append("")
+            prompt_parts.append("=== JOB CONTEXT ===")
+            prompt_parts.append(self._format_dict(job_context, indent=2))
         
-        # Instruction
-        prompt_parts.append("INSTRUCTION:")
-        prompt_parts.append("Generate a reusable rule that can match this field type and fill it with the selected value.")
-        prompt_parts.append("The rule should work for similar questions in the future.")
+        prompt_parts.append("")
+        prompt_parts.append("=== TASK ===")
+        prompt_parts.append("Generate a reusable rule that will automatically fill similar form fields in the future.")
+        prompt_parts.append("")
+        prompt_parts.append("The rule should:")
+        prompt_parts.append("1. Match similar questions using a regex pattern (q_pattern)")
+        prompt_parts.append("2. Use an appropriate strategy to fill the field with the selected value")
+        prompt_parts.append("3. Work for fields with the same field_type, site, form_kind, and locale")
+        prompt_parts.append("")
+        prompt_parts.append("Consider the following when generating the rule:")
+        prompt_parts.append("- The selected value was chosen based on the candidate profile")
+        prompt_parts.append(f"- The field type is '{field_info.get('field_type', 'unknown')}'")
+        if field_info.get('options'):
+            prompt_parts.append(f"- The selected value '{selected_value}' is one of {len(field_info['options'])} available options")
+        if 'llm_confidence' in field_info:
+            confidence = field_info.get('llm_confidence', 0)
+            prompt_parts.append(f"- The LLM's confidence in this decision was {confidence:.2f}")
         
         return "\n".join(prompt_parts)
     

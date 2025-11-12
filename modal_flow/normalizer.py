@@ -116,8 +116,31 @@ class QuestionNormalizer:
         
         # Trim
         normalized = normalized.strip()
+
+        # Deduplicate repeated halves (common for duplicated legends + labels)
+        normalized = self._deduplicate_repeated_text(normalized)
         
         return normalized
+
+    def _deduplicate_repeated_text(self, text: str) -> str:
+        """
+        Collapse strings composed of repeated halves into a single occurrence.
+        """
+        current = text
+        while current:
+            tokens = current.split()
+            if len(tokens) % 2 != 0 or not tokens:
+                break
+            midpoint = len(tokens) // 2
+            first_half = tokens[:midpoint]
+            second_half = tokens[midpoint:]
+            if first_half != second_half:
+                break
+            reduced = " ".join(first_half)
+            if reduced == current:
+                break
+            current = reduced
+        return current
 
     def normalize_string(self, text: str) -> str:
         """

@@ -49,6 +49,7 @@ class ModalFlowFormFiller(AbstractFormFiller):
                 llm_delegate=self._resources.llm_delegate,
                 learning_config=self._resources.learning_config,
                 logger=self._logger,
+                capture_screenshots=app_config.modal_flow.capture_screenshots,
             )
 
             outcome: Any = await runner.run(

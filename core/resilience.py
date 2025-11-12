@@ -674,6 +674,41 @@ class SelectorExecutor:
             )
         except Exception:
             return False
+    
+    async def execute_operation(
+        self,
+        selector_name: str,
+        operation: Callable[..., Awaitable[T]],
+        context: Optional[Dict[str, Any]] = None,
+        *args,
+        **kwargs
+    ) -> T:
+        """
+        Execute a custom operation with resilience (retry, circuit breaker, metrics).
+        
+        This is a public API for executing arbitrary operations that need resilience
+        patterns but don't fit into the standard selector operations (click, fill, etc).
+        
+        Args:
+            selector_name: Name of the selector/operation (for logs, metrics, and circuit breaker)
+            operation: Async function to execute
+            context: Additional context for logging
+            *args: Positional arguments to pass to the operation
+            **kwargs: Keyword arguments to pass to the operation
+            
+        Returns:
+            Result of the operation
+            
+        Raises:
+            Exception: If the operation fails after all retries, or if the circuit breaker is open
+        """
+        return await self._execute_with_resilience(
+            selector_name=selector_name,
+            operation=operation,
+            context=context,
+            *args,
+            **kwargs
+        )
 
 
 # Singleton instance for app-wide selector executor

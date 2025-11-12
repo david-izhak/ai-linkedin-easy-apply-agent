@@ -139,9 +139,36 @@ class LLMClient:
             return result
             
         except Exception as e:
-            logger.error(
-                f"Failed to generate structured response from LLM after {self.max_retries} attempts: {str(e)}"
+            # Try tolerant fallback to salvage usable data for downstream fixers
+            logger.warning(
+                f"Structured output failed ({type(e).__name__}: {e}). Trying tolerant fallback."
             )
-            raise LLMGenerationError(
-                prompt=prompt, provider=self.provider, model=self.model
-            ) from e
+            try:
+                # Rebuild messages for a raw invoke
+                messages = []
+                if system_message:
+                    messages.append(SystemMessage(content=system_message))
+                messages.append(HumanMessage(content=prompt))
+
+                raw = self.client.invoke(messages)
+                content = getattr(raw, "content", None) or str(raw)
+
+                # Extract first JSON object from the content
+                import re
+                import json
+                match = re.search(r"\{[\s\S]*\}", content)
+                if match:
+                    data = json.loads(match.group(0))
+                    logger.debug(f"Tolerant fallback parsed dict: {data}")
+                    # Return dict; callers (delegates) will validate/repair
+                    return data  # type: ignore[return-value]
+                else:
+                    logger.debug("Tolerant fallback: no JSON object found in content.")
+                    raise ValueError("No JSON object found in fallback content.")
+            except Exception as e2:
+                logger.error(
+                    f"Failed to generate structured response from LLM after fallback: {e2}"
+                )
+                raise LLMGenerationError(
+                    prompt=prompt, provider=self.provider, model=self.model
+                ) from e

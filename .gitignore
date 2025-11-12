@@ -24,6 +24,7 @@ resume.txt
 screenshots/
 logs/
 scripts/
+scripts2/
 generated_letters/
 *.db
 TODO.md

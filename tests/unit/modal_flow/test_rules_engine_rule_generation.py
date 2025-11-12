@@ -1,5 +1,6 @@
 """Unit tests for rule generation integration in RulesEngine."""
 
+import logging
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from pathlib import Path
@@ -234,6 +235,52 @@ class TestRuleGenerationIntegration:
         
         # Verify generate_rule was called
         mock_llm_delegate.generate_rule.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_rule_failure_skips_rule_generation(
+        self, rules_engine, mock_llm_delegate, temp_rule_store, caplog
+    ):
+        """Ensure learning is skipped when an existing rule fails to produce a value."""
+        temp_rule_store.data["rules"].append(
+            {
+                "id": "test_rule_none",
+                "scope": {
+                    "site": "*",
+                    "form_kind": "job_apply",
+                    "locale": ["en"],
+                },
+                "signature": {
+                    "field_type": "checkbox",
+                    "q_pattern": "(?i)agree",
+                    "options_fingerprint": None,
+                },
+                "strategy": {"kind": "literal", "params": {"value": None}},
+                "constraints": {"required": True},
+            }
+        )
+        temp_rule_store.save()
+
+        llm_decision = LLMDecision(
+            decision="check",
+            value=True,
+            confidence=0.9,
+            suggest_rule=None,
+        )
+        mock_llm_delegate.decide.return_value = llm_decision
+
+        with caplog.at_level(logging.INFO):
+            result = await rules_engine.decide(
+                question="Do you agree?",
+                field_type="checkbox",
+                options=None,
+            )
+
+        assert result is True
+        mock_llm_delegate.generate_rule.assert_not_called()
+        assert any("[RULE_FAILURE]" in record.message for record in caplog.records)
+        assert any(
+            "[RULE_GENERATION_SKIPPED]" in record.message for record in caplog.records
+        )
     
     @pytest.mark.asyncio
     async def test_rule_generation_with_different_field_types(

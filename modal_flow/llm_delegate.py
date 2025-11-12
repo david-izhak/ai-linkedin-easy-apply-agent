@@ -52,50 +52,14 @@ class StrategyDefinition(BaseModel):
         kind = self.kind
         params = self.params or {}
         
-        # Define required params for each strategy kind
-        required_params = {
-            "literal": ["value"],
-            "profile_key": ["key"],
-            "numeric_from_profile": ["key"],
-            "one_of_options": [],  # Either "preferred" or "synonyms" should be present
-            "one_of_options_from_profile": ["key"],  # "synonyms" is optional but recommended
-            "salary_by_currency": ["base_key_template", "default_currency"],
-        }
-        
-        # Check for literal strategy
+        # Keep strict validation only for 'literal' to avoid early hard failures.
         if kind == "literal":
             if "value" not in params:
                 raise ValueError(f"Strategy 'literal' requires 'value' in params, got: {params}")
         
-        # Check for profile_key strategy
-        elif kind == "profile_key":
-            if "key" not in params or not params.get("key"):
-                raise ValueError(f"Strategy 'profile_key' requires 'key' in params, got: {params}")
-        
-        # Check for numeric_from_profile strategy
-        elif kind == "numeric_from_profile":
-            if "key" not in params or not params.get("key"):
-                raise ValueError(f"Strategy 'numeric_from_profile' requires 'key' in params, got: {params}")
-        
-        # Check for one_of_options strategy
-        elif kind == "one_of_options":
-            if "preferred" not in params and "synonyms" not in params:
-                raise ValueError(f"Strategy 'one_of_options' requires either 'preferred' or 'synonyms' in params, got: {params}")
-        
-        # Check for one_of_options_from_profile strategy
-        elif kind == "one_of_options_from_profile":
-            if "key" not in params or not params.get("key"):
-                raise ValueError(f"Strategy 'one_of_options_from_profile' requires 'key' in params, got: {params}")
-            # synonyms is optional but recommended
-            if "synonyms" not in params or not params.get("synonyms"):
-                # This is a warning, not an error - we can try to use the value directly
-                pass
-        
-        # Check for salary_by_currency strategy
-        elif kind == "salary_by_currency":
-            if "base_key_template" not in params or "default_currency" not in params:
-                raise ValueError(f"Strategy 'salary_by_currency' requires 'base_key_template' and 'default_currency' in params, got: {params}")
-        
+        # For other strategies (profile_key, numeric_from_profile, one_of_options,
+        # one_of_options_from_profile, salary_by_currency) do not raise here.
+        # They will be validated or fixed later during rule processing.
         return self
 
 

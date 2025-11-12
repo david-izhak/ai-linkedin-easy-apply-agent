@@ -478,8 +478,13 @@ class StrategyGenerator:
                     params={"key": "phone"}
                 )
         
-        # Cannot determine strategy for text field
-        logger.debug(f"Cannot determine profile key for text field: {question}")
+        # For text fields that don't match profile keys, use literal strategy with selected_value
+        # This handles cases like "referral", "message to hiring manager", etc.
+        logger.debug(
+            f"Cannot determine profile key for text field: {question}. "
+            f"Will use literal strategy with selected_value if provided."
+        )
+        # Return None to let the caller handle it (may use literal strategy as fallback)
         return None
     
     def _generate_combobox_strategy(

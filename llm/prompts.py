@@ -274,7 +274,41 @@ RULE_GENERATION_PROMPT = """ROLE: Rule Generation Engine
 Your task is to generate a reusable rule for form field filling based on the provided context.
 
 TASK:
-Generate a rule that can be used to automatically fill similar fields in the future.
+Generate a rule that can be used to automatically fill similar fields in the future WITHOUT requiring LLM assistance.
+
+CONTEXT ANALYSIS:
+Before generating the rule, carefully analyze:
+1. FIELD TYPE: What type of field is this? (text, number, checkbox, radio, select, combobox)
+2. SELECTED VALUE: What value was selected? Where did it come from? (profile, literal value, calculated)
+3. AVAILABLE OPTIONS: If this is a select/radio field, what options are available?
+4. QUESTION PATTERN: What key words/phrases identify this field type? (normalized question is provided)
+5. PROFILE DATA: What data from the candidate profile was used to determine the selected value?
+6. LLM DECISION CONTEXT: How confident was the LLM in this decision? What was the decision type?
+
+RULE GENERATION PROCESS:
+Step 1: Analyze the selected value and determine its source
+- If the value is from the candidate profile (e.g., email, phone, city), use profile-based strategy
+- If the value is a literal/constant (e.g., "Yes", "No", true, false), use literal strategy
+- If the value is calculated or derived, determine the calculation method
+
+Step 2: Choose the appropriate strategy based on field type and value source
+- Checkbox fields → usually "literal" with true/false
+- Text fields → "profile_key" if from profile, "literal" if constant
+- Number fields → "numeric_from_profile" if from profile, "literal" if constant
+- Radio/Select fields → "one_of_options" if fixed choice, "one_of_options_from_profile" if from profile
+
+Step 3: Create a regex pattern that matches similar questions
+- Use the normalized question as a guide
+- Extract key identifying words/phrases
+- Include multilingual variants (English and Russian)
+- Use named capture groups for dynamic values (e.g., skill names)
+- Make the pattern specific enough to avoid false matches but general enough to work for variations
+
+Step 4: Set confidence based on:
+- How well the pattern matches the question
+- How clear the value source is
+- How likely similar fields will appear
+- LLM confidence in the decision (if available)
 
 RULE STRUCTURE:
 The rule must contain:
@@ -291,42 +325,58 @@ The rule must contain:
 
 STRATEGY SELECTION GUIDE:
 
-- Checkbox fields (boolean):
-  Use "literal" strategy with value: true/false
-  Example: {"kind": "literal", "params": {"value": true}}
-  REQUIRED: "value" must be present in params
+IMPORTANT: Always check the candidate profile to see if the selected value comes from a profile field. If it does, use a profile-based strategy. If not, use a literal strategy.
 
-- Text fields with profile data:
-  Use "profile_key" strategy with appropriate key from candidate profile
-  Example: {"kind": "profile_key", "params": {"key": "address.city"}}
-  Common keys: address.city, address.country, phone, email, links.github, links.linkedin, personal.firstName, personal.lastName
-  REQUIRED: "key" must be present in params and must be a valid profile key path
+1. CHECKBOX FIELDS (boolean):
+   - Analyze: Is this a skill checkbox? Is it a preference checkbox?
+   - If the value is true/false and it's based on profile data (e.g., skill exists in profile), use "profile_key" or check profile.years_experience
+   - If the value is a fixed preference (e.g., always check "follow company"), use "literal"
+   - Example: {"kind": "literal", "params": {"value": true}}
+   - REQUIRED: "value" must be present in params (boolean: true or false)
 
-- Number fields with profile data:
-  Use "numeric_from_profile" strategy with key path
-  Example: {"kind": "numeric_from_profile", "params": {"key": "years_experience.python"}}
-  For dynamic skill extraction, use named capture groups: {"kind": "numeric_from_profile", "params": {"key": "years_experience.{skill}"}}
-  REQUIRED: "key" must be present in params and must point to a numeric field in the profile (e.g., "years_experience.python")
+2. TEXT FIELDS:
+   - Analyze: Where does the selected value come from?
+   - If from profile (email, phone, city, name, etc.), use "profile_key"
+   - If it's a fixed message or constant, use "literal"
+   - Check the candidate profile for matching keys: address.city, address.country, phone, email, links.github, links.linkedin, personal.firstName, personal.lastName, professional.summary, professional.coverLetter
+   - Example: {"kind": "profile_key", "params": {"key": "address.city"}}
+   - REQUIRED: "key" must be present in params and must be a valid profile key path
 
-- Radio/Select fields with fixed options:
-  Use "one_of_options" strategy with preferred option OR synonyms
-  Example 1 (simple): {"kind": "one_of_options", "params": {"preferred": ["Yes", "Да"]}}
-  Example 2 (with synonyms): {"kind": "one_of_options", "params": {"synonyms": {"Yes": ["Yes", "Да", "yes"], "No": ["No", "Нет", "no"]}}}
-  REQUIRED: Either "preferred" (list of preferred options) OR "synonyms" (map of canonical values to synonyms) must be present in params
-  NOTE: "preferred" is a list of option values that should be selected. "synonyms" is a map for matching options with variations.
+3. NUMBER FIELDS:
+   - Analyze: Is this years of experience? Salary? Notice period?
+   - If from profile (years_experience, salary_expectation, notice_period_days), use "numeric_from_profile"
+   - If it's a fixed number, use "literal"
+   - For dynamic skill extraction, use named capture groups in q_pattern: "(?P<skill>python|java).*experience"
+   - Then use: {"kind": "numeric_from_profile", "params": {"key": "years_experience.{skill}"}}
+   - Example: {"kind": "numeric_from_profile", "params": {"key": "years_experience.python"}}
+   - REQUIRED: "key" must be present in params and must point to a numeric field in the profile
 
-- Radio/Select fields with profile-based selection:
-  Use "one_of_options_from_profile" strategy with profile key and synonyms
-  Example 1 (language): {"kind": "one_of_options_from_profile", "params": {"key": "languages[0].language", "synonyms": {"English": ["English", "английский"], "Hebrew": ["Hebrew", "иврит"], "Russian": ["Russian", "русский"]}}}
-  Example 2 (work authorization): {"kind": "one_of_options_from_profile", "params": {"key": "work_authorization.US", "synonyms": {"yes": ["Yes", "Да", "U.S. Citizen"], "no": ["No", "Нет"], "need_visa": ["Need Visa", "Требуется виза"]}}}
-  Example 3 (gender): {"kind": "one_of_options_from_profile", "params": {"key": "equalOpportunity.gender", "synonyms": {"Male": ["Male", "Мужской"], "Female": ["Female", "Женский"], "Decline": ["Decline", "Prefer not to say", "Не указывать"]}}}
-  REQUIRED: "key" must be present in params and must point to a field in the profile
-  RECOMMENDED: "synonyms" should be present to map profile values to form options. If omitted, the system will try to match the profile value directly.
+4. RADIO/SELECT FIELDS WITH FIXED OPTIONS:
+   - Analyze: Are the options fixed (Yes/No, Agree/Disagree)? Is the selection always the same?
+   - Use "one_of_options" if the selection is a fixed preference regardless of profile
+   - Use "preferred" if you always want to select specific options
+   - Use "synonyms" if you need to match option variations
+   - Example 1 (simple): {"kind": "one_of_options", "params": {"preferred": ["Yes", "Да"]}}
+   - Example 2 (with synonyms): {"kind": "one_of_options", "params": {"synonyms": {"Yes": ["Yes", "Да", "yes", "Willing"], "No": ["No", "Нет", "no", "Not willing"]}}}
+   - REQUIRED: Either "preferred" (list of preferred options) OR "synonyms" (map of canonical values to synonym lists) must be present in params
+   - NOTE: "preferred" is a list of option values to select. "synonyms" maps canonical values to lists of possible option variations.
 
-- Salary fields:
-  Use "salary_by_currency" strategy
-  Example: {"kind": "salary_by_currency", "params": {"base_key_template": "salary_expectation.monthly_net_{currency}", "default_currency": "nis"}}
-  REQUIRED: Both "base_key_template" and "default_currency" must be present in params
+5. RADIO/SELECT FIELDS WITH PROFILE-BASED SELECTION:
+   - Analyze: Does the selection depend on the candidate profile? (e.g., gender, language, work authorization)
+   - Use "one_of_options_from_profile" if the selection is based on profile data
+   - Check the candidate profile for: languages[0].language, work_authorization.US, equalOpportunity.gender, equalOpportunity.ethnicity, etc.
+   - ALWAYS provide "synonyms" to map profile values to form options
+   - Example 1 (language): {"kind": "one_of_options_from_profile", "params": {"key": "languages[0].language", "synonyms": {"English": ["English", "english", "английский"], "Hebrew": ["Hebrew", "hebrew", "иврит"], "Russian": ["Russian", "russian", "русский"]}}}
+   - Example 2 (work authorization): {"kind": "one_of_options_from_profile", "params": {"key": "work_authorization.US", "synonyms": {"yes": ["Yes", "Да", "U.S. Citizen", "U.S. Citizen/Permanent Resident"], "no": ["No", "Нет"], "need_visa": ["Need Visa", "Требуется виза"]}}}
+   - Example 3 (gender): {"kind": "one_of_options_from_profile", "params": {"key": "equalOpportunity.gender", "synonyms": {"Male": ["Male", "male", "Мужской"], "Female": ["Female", "female", "Женский"], "Decline": ["Decline", "decline", "Prefer not to say", "Не указывать"]}}}
+   - REQUIRED: "key" must be present in params and must point to a field in the profile
+   - REQUIRED: "synonyms" should be present to map profile values to form options. Include common variations (case-insensitive, multilingual).
+
+6. SALARY FIELDS:
+   - Analyze: Is this a salary/compensation field? What currency is mentioned?
+   - Use "salary_by_currency" strategy
+   - Example: {"kind": "salary_by_currency", "params": {"base_key_template": "salary_expectation.monthly_net_{currency}", "default_currency": "nis"}}
+   - REQUIRED: Both "base_key_template" and "default_currency" must be present in params
 
 EXAMPLES:
 
@@ -422,13 +472,66 @@ STRATEGY FIELD REQUIREMENTS (QUICK REFERENCE):
 - For radio/select fields (with synonyms): {"kind": "one_of_options", "params": {"synonyms": {"Yes": ["Yes", "Да"], "No": ["No", "Нет"]}}}
 - For radio/select fields (profile-based): {"kind": "one_of_options_from_profile", "params": {"key": "languages[0].language", "synonyms": {"English": ["English"], "Hebrew": ["Hebrew"]}}}
 
-IMPORTANT:
-- The q_pattern should be specific enough to match this field type but general enough to work for similar questions
-- Use case-insensitive matching (regex flags are handled by the system)
-- For multilingual support, include both English and Russian variants in the pattern
-- Confidence should reflect how confident you are that this rule will work for similar fields
+PATTERN GENERATION GUIDELINES:
+
+1. USE THE NORMALIZED QUESTION: The normalized question (q_norm) is provided in the field context. Use it as the primary source for pattern generation.
+
+2. EXTRACT KEY WORDS: Identify 2-5 key words that uniquely identify this field type:
+   - Remove common words: "the", "a", "an", "is", "are", "what", "which", "your", "you"
+   - Keep meaningful words: skill names, field types, question keywords
+   - Example: "Years of experience with Python" → key words: "years", "experience", "python"
+
+3. CREATE REGEX PATTERN:
+   - Combine key words with alternation: "(years?.*experience.*python|опыт.*python)"
+   - Use optional parts with "?": "years?" matches "year" or "years"
+   - Use ".*" for flexible word order: "years.*experience" matches "years of experience" or "years experience"
+   - Include multilingual variants: "(phone|телефон)", "(email|e-mail|электронная почта)"
+   - Use named capture groups for dynamic values: "(?P<skill>python|java|javascript)"
+
+4. PATTERN SPECIFICITY:
+   - Be specific enough to avoid false matches (e.g., "python" alone might match "python developer" when you want "python experience")
+   - Be general enough to match variations (e.g., "years of experience" and "experience years")
+   - Include common variations and synonyms
+   - Test mentally: Would this pattern match similar questions? Would it avoid false positives?
+
+5. PATTERN LENGTH:
+   - Patterns should be between 10 and 200 characters
+   - Avoid overly generic patterns like ".*" or ".*.*"
+   - Avoid overly specific patterns that won't match variations
+
+CONFIDENCE ASSESSMENT:
+
+Set confidence based on:
+- Pattern quality: How well does the pattern match the question? (0.0-1.0)
+- Value source clarity: How clear is it where the value comes from? (0.0-1.0)
+- Profile data availability: Is the required profile data available? (0.0-1.0)
+- Similarity to examples: How similar is this to known working rules? (0.0-1.0)
+- LLM confidence: If LLM confidence is provided, use it as a factor (0.0-1.0)
+
+Final confidence = average of the above factors, but:
 - Minimum confidence for rule acceptance is 0.85
-- Patterns should be between 3 and 200 characters
-- Avoid overly generic patterns like ".*" or ".*.*"
-- Use named capture groups for dynamic value extraction when appropriate
-- ALWAYS provide a complete strategy object with both "kind" and "params" fields. Never return an empty strategy object."""
+- If any factor is very low (<0.5), reduce overall confidence
+- If pattern is too generic or value source is unclear, reduce confidence
+
+CRITICAL REQUIREMENTS RECAP:
+
+1. ALWAYS provide a complete strategy object: {"kind": "...", "params": {...}}
+2. NEVER return empty params: {} - always fill in required parameters
+3. ALWAYS check the candidate profile to see if the selected value comes from a profile field
+4. ALWAYS provide synonyms for one_of_options_from_profile strategies
+5. ALWAYS use the normalized question (q_norm) as a guide for pattern generation
+6. ALWAYS include multilingual variants (English and Russian) in patterns when applicable
+7. ALWAYS set confidence based on pattern quality, value source clarity, and profile data availability
+
+OUTPUT VALIDATION:
+
+Before returning the rule, verify:
+- ✓ q_pattern is not empty and is between 10-200 characters
+- ✓ strategy.kind is one of the valid strategy kinds
+- ✓ strategy.params contains all required parameters for the strategy kind
+- ✓ For one_of_options: either "preferred" or "synonyms" is present
+- ✓ For profile-based strategies: "key" is present and points to a valid profile field
+- ✓ For literal strategies: "value" is present
+- ✓ confidence is between 0.0 and 1.0, and >= 0.85 for acceptance
+- ✓ Pattern includes key identifying words from the question
+- ✓ Pattern is specific enough to avoid false matches but general enough to match variations"""

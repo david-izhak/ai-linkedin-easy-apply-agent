@@ -51,7 +51,7 @@ class LearningConfig:
     rule_generation_fallback: bool = True  # Use suggest_rule from decision as fallback if separate generation fails
     
     # Quality thresholds
-    confidence_threshold: float = 0.85
+    confidence_threshold: float = 0.70
     
     # Validation settings
     enable_duplicate_check: bool = True

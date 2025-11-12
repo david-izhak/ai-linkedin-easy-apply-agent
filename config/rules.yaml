@@ -463,23 +463,30 @@ rules:
     kind: profile_key
     params:
       key: how_did_you_hear
-- id: rule_future_opportunities
+- constraints:
+    required: true
+  id: rule_future_opportunities
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-11T18:10:29Z'
+    hits: 0
+    last_seen: null
+    source: llm
   scope:
+    form_kind: job_apply
+    locale:
+    - en
     site: '*'
   signature:
     field_type: radio
-    q_pattern: (future opportunities|будущие вакансии)
+    options_fingerprint: sha1:bd43b1af7c0b418b85893f4f78fc76b50c5c9e71
+    q_pattern: (future opportunities|considered for future|будущие вакансии|будущих
+      возможностях)
   strategy:
-    kind: one_of_options_from_profile
+    kind: one_of_options
     params:
-      key: future_opportunities_willingness
-      synonyms:
-        'No':
-        - 'no'
-        - нет
-        'Yes':
-        - 'yes'
-        - да
+      preferred:
+      - 'Yes'
 - id: rule_contact_email_text
   scope:
     site: '*'
@@ -716,4 +723,1175 @@ rules:
         - Russian
         - russian
         - русский
+- constraints:
+    required: true
+  id: rls_1762820611
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:23:31Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (confirmed)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820643
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:24:03Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (agree|terms|conditions)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820684
+  meta:
+    confidence: 0.7
+    created_at: '2025-11-11T00:24:44Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (accounting)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820690
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:24:50Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (corp|business|strategy)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820695
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:24:55Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: ((have|completed|hold|possess)\s+(an?\s+)?(academic\s+)?(degree|education|qualification))|(highest\s+education\s+level)|(education\s+history)|(education\s+background)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820702
+  meta:
+    confidence: 0.7
+    created_at: '2025-11-11T00:25:02Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (facilities|real|estate)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820707
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:25:07Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (finance)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820712
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:25:12Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (legal)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820718
+  meta:
+    confidence: 0.7
+    created_at: '2025-11-11T00:25:18Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (manufacturing)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820724
+  meta:
+    confidence: 0.7
+    created_at: '2025-11-11T00:25:24Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (marketing)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820729
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:25:29Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (operations)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820737
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:25:37Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (people|team|human|resources)
+  strategy:
+    kind: literal
+    params:
+      value: false
+- constraints:
+    required: true
+  id: rls_1762820743
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:25:43Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (information|security)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820749
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:25:49Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (engineering|software)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820757
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:25:57Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (devops)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820762
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:26:02Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (data|informatics)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820768
+  meta:
+    confidence: 0.85
+    created_at: '2025-11-11T00:26:08Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (product|management)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820775
+  meta:
+    confidence: 0.9
+    created_at: '2025-11-11T00:26:15Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (quality|assurance)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820781
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:26:21Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (technical|writing)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820790
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:26:30Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (ecosystems)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820801
+  meta:
+    confidence: 0.7
+    created_at: '2025-11-11T00:26:41Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (resident|engineer)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820814
+  meta:
+    confidence: 0.7
+    created_at: '2025-11-11T00:26:54Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (customer|success)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762820855
+  meta:
+    confidence: 0.9
+    created_at: '2025-11-11T00:27:35Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: text
+    options_fingerprint: null
+    q_pattern: (referred)
+  strategy:
+    kind: literal
+    params:
+      value: Not Applicable
+- constraints:
+    required: true
+  id: rls_1762820865
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:27:45Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: text
+    options_fingerprint: null
+    q_pattern: (your|message|hiring|manager)
+  strategy:
+    kind: literal
+    params:
+      value: Dear Hiring Manager, I am a Senior Backend Engineer with 9 years of experience
+        specializing in Java and Python. I excel at building high-throughput, resilient
+        microservices, and data pipelines using Kafka, Kubernetes, and cloud-native
+        technologies (AWS, Azure, GCP). My expertise covers scalable architecture,
+        distributed data stores (ScyllaDB, Cassandra), and robust CI/CD practices.
+        I am highly interested in this opportunity and look forward to discussing
+        how my skills can contribute to your team's success. My full profile and GitHub
+        are linked for your review.
+- constraints:
+    required: true
+  id: rls_1762821498
+  meta:
+    confidence: 0.7
+    created_at: '2025-11-11T00:38:18Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (sales)
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762821510
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T00:38:30Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (service|account|manager)
+  strategy:
+    kind: literal
+    params:
+      value: false
+- constraints:
+    required: true
+  id: rls_1762874554
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T15:22:34Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: sha1:f6eae29c5f100e2c4a9a29e1d7a25b72e0435d6d
+    q_pattern: (country|страна|код|dialing|phone|телефон|field)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - "\n        Israel (+972)\n      "
+- constraints:
+    required: true
+  id: rls_1762874565
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T15:22:45Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: sha1:406fb5149f47547b6e3fe68bb6ea30e503e9e667
+    q_pattern: (email|e-mail|электронная почта|contact.*email|контакт.*почта)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - "\n        itskovdi@gmail.com\n      "
+- constraints:
+    required: true
+  id: rls_1762884573
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T18:09:33Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:d9f3d4a4354c9bd420e8ded3b43efe2a351a89f1
+    q_pattern: (legally|authorized|eligible|разрешение|авторизован).*work.*(country|restrictions|работать|спонсорство)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'Yes'
+- constraints:
+    required: true
+  id: rls_1762884603
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-11T18:10:03Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:4e2c78144868cf52944a10b47a81470e1eb97729
+    q_pattern: (sponsorship|visa|work authorization|спонсорство|виза).*?(need|require|employment|future|требуется)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'No'
+- constraints:
+    required: true
+  id: rls_1762884620
+  meta:
+    confidence: 0.9
+    created_at: '2025-11-11T18:10:20Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:83c38eff9576e2fd44ab6286630ce94dae24175c
+    q_pattern: (interviewed.*(past|previously)|проходили.*собеседование.*(ранее|прошлом))
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'No'
+- constraints:
+    required: true
+  id: rls_1762884662
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T18:11:02Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: checkbox
+    options_fingerprint: null
+    q_pattern: (areas? of work|areas? of interest|сфер[аы].*работ[ыа]|интересн[ыеая].*сфер[аы])
+  strategy:
+    kind: literal
+    params:
+      value: true
+- constraints:
+    required: true
+  id: rls_1762884678
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-11T18:11:18Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: sha1:64bac4e4021ecd895d47204ca71bfe56a9f732c0
+    q_pattern: (relocation|relocate|переезд|готовность.*переезду)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - I am willing to relocate and will self relocate
+- constraints:
+    required: true
+  id: rls_1762884694
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-11T18:11:34Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: sha1:fa29ee51be80bd5985f07029ff5d48fb95fd1f67
+    q_pattern: (previously|earlier).*?(worked|employed).*?(for|at).*?(?P<company>palo
+      alto networks|пало альто нетворкс)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - No - I have not worked for Palo Alto Networks
+- constraints:
+    required: true
+  id: rls_1762884705
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-11T18:11:45Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: sha1:a0728f7d6816f5fc3168fbfa897f11ef4484c21e
+    q_pattern: (how did you hear about us|source|referral|откуда узнали)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - Job Board
+- constraints:
+    required: true
+  id: rls_1762884729
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T18:12:09Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:d9f3d4a4354c9bd420e8ded3b43efe2a351a89f1
+    q_pattern: (authorized|разрешение|visa|виза|sponsorship|спонсорство).*?(work|работать)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'Yes'
+- constraints:
+    required: true
+  id: rls_1762884753
+  meta:
+    confidence: 0.85
+    created_at: '2025-11-11T18:12:33Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:83c38eff9576e2fd44ab6286630ce94dae24175c
+    q_pattern: (interviewed?.*(palo alto networks|пало альто нетворкс|в прошлом|ранее))
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: previous_employment.palo_alto_networks
+      synonyms:
+        'no':
+        - 'No'
+        - Нет
+        - 'no'
+        - No - I have not worked for
+        - I have not worked for
+        'yes':
+        - 'Yes'
+        - Да
+        - 'yes'
+        - I have worked for
+- constraints:
+    required: true
+  id: rls_1762884810
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-11T18:13:30Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:83c38eff9576e2fd44ab6286630ce94dae24175c
+    q_pattern: (interviewed|собеседование).*?(palo alto networks|пало альто нетворкс).*?(past|ранее)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: previous_employment.palo_alto_networks
+      synonyms:
+        'no':
+        - 'No'
+        - Нет
+        - 'no'
+        - No - I have not worked for
+        - I have not worked for
+        'yes':
+        - 'Yes'
+        - Да
+        - 'yes'
+        - I have worked for
+- constraints:
+    required: true
+  id: rls_1762884832
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T18:13:52Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: sha1:fa29ee51be80bd5985f07029ff5d48fb95fd1f67
+    q_pattern: (previously worked|worked for|работали в).*?(?P<company>[\w\s]+)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: previous_employment.palo_alto_networks
+      synonyms:
+        'no':
+        - 'No'
+        - Нет
+        - 'no'
+        - No - I have not worked for
+        - I have not worked for
+        'yes':
+        - 'Yes'
+        - Да
+        - 'yes'
+        - I have worked for
+- constraints:
+    required: true
+  id: rls_1762902340
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T23:05:40Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:83c38eff9576e2fd44ab6286630ce94dae24175c
+    q_pattern: (interviewed|собеседование).*?(palo alto networks|пало альто нетворкс).*?(past|прошлом)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: previous_employment.palo_alto_networks
+      synonyms:
+        'no':
+        - 'No'
+        - Нет
+        - 'no'
+        - No - I have not worked for
+        - I have not worked for
+        'yes':
+        - 'Yes'
+        - Да
+        - 'yes'
+        - I have worked for
+- constraints:
+    required: true
+  id: rls_1762902348
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T23:05:48Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:bd43b1af7c0b418b85893f4f78fc76b50c5c9e71
+    q_pattern: (future|next|other).*?(opportunities|consider(ed)?|рассмотрение|будущие|другие|вакансии)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: future_opportunities_willingness
+      synonyms:
+        'No':
+        - 'No'
+        - Нет
+        - 'no'
+        'Yes':
+        - 'Yes'
+        - Да
+        - 'yes'
+- constraints:
+    required: true
+  id: rls_1762902438
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-11T23:07:18Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:83c38eff9576e2fd44ab6286630ce94dae24175c
+    q_pattern: (interviewed|собеседование|контактировали).*?(palo alto networks|пало
+      альто)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: previous_employment.palo_alto_networks
+      synonyms:
+        'no':
+        - 'No'
+        - Нет
+        - 'no'
+        - No - I have not worked for
+        - I have not worked for
+        'yes':
+        - 'Yes'
+        - Да
+        - 'yes'
+        - I have worked for
+- constraints:
+    required: true
+  id: rls_1762902521
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-11T23:08:41Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:d9f3d4a4354c9bd420e8ded3b43efe2a351a89f1
+    q_pattern: (authorized to work|legally authorized|разрешение на работу).*?(restrictions|ограничения|visa|виза|sponsorship|спонсорство)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'Yes'
+- constraints:
+    required: true
+  id: rls_1762905740
+  meta:
+    confidence: 0.9
+    created_at: '2025-11-12T00:02:20Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:71e4d60f41af6338cf75aedadd8a2b015ea6c46d
+    q_pattern: (authorized to work|legally authorized|право на работу|разрешение на
+      работу).*?(restrictions|ограничения)?
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'Yes'
+- constraints:
+    required: true
+  id: rls_1762905763
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-12T00:02:43Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:71e4d60f41af6338cf75aedadd8a2b015ea6c46d
+    q_pattern: (sponsorship|visa|work authorization|спонсорство|виза|разрешение на
+      работу).*?(need|require|требуется|нужно)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'No'
+- constraints:
+    required: true
+  id: rls_1762905773
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-12T00:02:53Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:71e4d60f41af6338cf75aedadd8a2b015ea6c46d
+    q_pattern: (interview(ed)?|applied|собеседование|интервью|подавали).*?(past|previous|ранее|прошлом)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: previous_employment.palo_alto_networks
+      synonyms:
+        'no':
+        - 'No'
+        - Нет
+        - 'no'
+        - No - I have not worked for
+        - I have not worked for
+        'yes':
+        - 'Yes'
+        - Да
+        - 'yes'
+        - I have worked for
+- constraints:
+    required: true
+  id: rls_1762905780
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-12T00:03:00Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:71e4d60f41af6338cf75aedadd8a2b015ea6c46d
+    q_pattern: (considered.*future.*opportunities|будущие.*возможности|рассмотрение.*вакансии)
+  strategy:
+    kind: one_of_options_from_profile
+    params:
+      key: future_opportunities_willingness
+      synonyms:
+        'No':
+        - 'No'
+        - Нет
+        - 'no'
+        'Yes':
+        - 'Yes'
+        - Да
+        - 'yes'
+- constraints:
+    required: true
+  id: rls_1762958603
+  meta:
+    confidence: 0.95
+    created_at: '2025-11-12T14:43:23Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:71e4d60f41af6338cf75aedadd8a2b015ea6c46d
+    q_pattern: (sponsorship|visa|work authorization|спонсорство|виза|разрешение на
+      работу)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'No'
 schema_version: '1.0'

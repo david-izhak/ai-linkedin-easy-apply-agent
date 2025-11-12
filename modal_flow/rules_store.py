@@ -7,10 +7,13 @@ Based on technical specification section 4.3.
 import json
 import yaml
 import time
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Union
 
 from modal_flow.field_signature import FieldSignature
+
+logger = logging.getLogger(__name__)
 
 
 class RuleStore:
@@ -110,12 +113,17 @@ class RuleStore:
                 try:
                     # Always perform a case-insensitive regex search
                     match = re.search(q_pattern, signature.q_norm, re.IGNORECASE)
-                    print(f"[RuleStore] Rule '{rule_id}': pattern='{q_pattern}', q_norm='{signature.q_norm}', match={bool(match)}")
+                    logger.debug(
+                        f"[RuleStore.find] Rule '{rule_id}': pattern='{q_pattern}', "
+                        f"q_norm='{signature.q_norm}', match={bool(match)}"
+                    )
                     if not match:
                         continue
                 except re.error as e:
                     # If the pattern is an invalid regex, log it and skip the rule
-                    print(f"Warning: Invalid regex pattern '{q_pattern}' in rule '{rule_id}'. Error: {e}")
+                    logger.warning(
+                        f"[RuleStore.find] Invalid regex pattern '{q_pattern}' in rule '{rule_id}'. Error: {e}"
+                    )
                     continue
             
             # Check options fingerprint (if provided)
@@ -124,10 +132,16 @@ class RuleStore:
                 continue
             
             # Match found!
-            print(f"[RuleStore] Rule '{rule_id}' matched!")
+            logger.info(
+                f"[RuleStore.find] Rule '{rule_id}' matched! "
+                f"field_type='{signature.field_type}', q_norm='{signature.q_norm}'"
+            )
             return rule
         
-        print(f"[RuleStore] No rule found for field_type='{signature.field_type}', q_norm='{signature.q_norm}'")
+        logger.debug(
+            f"[RuleStore.find] No rule found for field_type='{signature.field_type}', "
+            f"q_norm='{signature.q_norm}', opts_fp='{signature.opts_fp}'"
+        )
         return None
     
     def is_duplicate_rule(
@@ -218,4 +232,8 @@ class RuleStore:
         
         self.data["rules"].append(rule)
         self.save()
+        logger.info(
+            f"[RuleStore.add_llm_rule] Rule '{rule_id}' added to store. "
+            f"Total rules: {len(self.data['rules'])}"
+        )
         return rule

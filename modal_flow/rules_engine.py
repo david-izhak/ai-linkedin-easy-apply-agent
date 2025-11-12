@@ -116,11 +116,23 @@ class RulesEngine:
         )
         
         # Step 1: Find rule
+        self.logger.info(
+            f"[RULES_ENGINE] Looking for rule: field_type='{field_type}', "
+            f"q_norm='{q_norm}', opts_fp='{signature.opts_fp}'"
+        )
         rule = self.rule_store.find(signature)
         rule_found = rule is not None
+        rule_failed = False
+        failed_rule_id: Optional[str] = None
+        failed_rule_reason: Optional[str] = None
+        failed_rule_context: Dict[str, Any] = {}
         
         if rule:
-            self.logger.debug(f"Rule found: {rule.get('id')}")
+            self.logger.info(
+                f"[RULES_ENGINE] Rule found: id='{rule.get('id')}', "
+                f"pattern='{rule.get('signature', {}).get('q_pattern')}', "
+                f"strategy='{rule.get('strategy', {}).get('kind')}'"
+            )
             strategy_kind = rule.get("strategy", {}).get("kind")
             params = rule.get("strategy", {}).get("params", {})
 
@@ -173,21 +185,59 @@ class RulesEngine:
                     
                     # NEW: Validate decision - if rule found but returns None/invalid, treat as error
                     if decision is None:
+                        rule_failed = True
+                        failed_rule_id = rule.get("id")
+                        failed_rule_reason = "strategy returned None"
+                        failed_rule_context = {
+                            "field_type": field_type,
+                            "q_norm": q_norm,
+                            "options": options,
+                            "site": site,
+                            "form_kind": form_kind,
+                            "locale": locale,
+                        }
                         self.logger.warning(
-                            f"Rule '{rule.get('id')}' found but strategy returned None. "
-                            f"Treating as rule failure and delegating to LLM fallback."
+                            "[RULE_FAILURE] Rule '%s' matched but strategy returned None. "
+                            "Manual review required. Context=%s",
+                            failed_rule_id,
+                            failed_rule_context,
                         )
                         # Fall through to LLM delegation
                     elif self._is_invalid_decision(decision, field_type, options):
+                        rule_failed = True
+                        failed_rule_id = rule.get("id")
+                        failed_rule_reason = f"strategy returned invalid value '{decision}'"
+                        failed_rule_context = {
+                            "field_type": field_type,
+                            "q_norm": q_norm,
+                            "options": options,
+                            "site": site,
+                            "form_kind": form_kind,
+                            "locale": locale,
+                        }
                         self.logger.warning(
-                            f"Rule '{rule.get('id')}' found but returned invalid value: '{decision}'. "
-                            f"Treating as rule failure and delegating to LLM fallback."
+                            "[RULE_FAILURE] Rule '%s' matched but returned invalid value '%s'. "
+                            "Manual review required. Context=%s",
+                            failed_rule_id,
+                            decision,
+                            failed_rule_context,
                         )
                         # Fall through to LLM delegation
                     else:
                         # Decision is valid, return it
                         return decision
                 except Exception as e:
+                    rule_failed = True
+                    failed_rule_id = rule.get("id")
+                    failed_rule_reason = f"strategy raised exception: {e}"
+                    failed_rule_context = {
+                        "field_type": field_type,
+                        "q_norm": q_norm,
+                        "options": options,
+                        "site": site,
+                        "form_kind": form_kind,
+                        "locale": locale,
+                    }
                     self.logger.error(
                         f"Strategy execution failed for rule '{rule.get('id')}': {e}. "
                         f"Delegating to LLM fallback.", exc_info=True
@@ -201,9 +251,13 @@ class RulesEngine:
                 # Fall through to LLM delegation
 
         # Step 2: Heuristic fallback (only if no rule was found or rule failed)
+        if not rule_found:
+            self.logger.info(
+                f"[RULES_ENGINE] No rule found, trying heuristics for field_type='{field_type}', q_norm='{q_norm}'"
+            )
         heuristic_decision = self._apply_heuristics(q_norm, field_type, options, question)
         if heuristic_decision is not None:
-            self.logger.info(f"Heuristic decision: {heuristic_decision}")
+            self.logger.info(f"[RULES_ENGINE] Heuristic decision: {heuristic_decision}")
             return heuristic_decision
         
         # Step 3: LLM Delegation
@@ -236,11 +290,14 @@ class RulesEngine:
                 "question": question,
                 "field_type": field_type,
                 "options": options,
-                "required": True,  # Default to required
+                "required": constraints.get("required", True) if constraints and isinstance(constraints, dict) else True,
+                "site": site,
+                "form_kind": form_kind,
+                "locale": locale,
             }
             
-            # Add constraints if provided
-            if constraints:
+            # Add constraints if provided (constraints may contain required, min, max, maxlength, pattern, etc.)
+            if constraints and isinstance(constraints, dict):
                 field_info.update(constraints)
             
             try:
@@ -252,7 +309,19 @@ class RulesEngine:
                     self.logger.info(f"LLM decision: {llm_decision.value} (confidence={llm_decision.confidence:.2f})")
                     
                     # Process rule generation if learning is enabled
-                    if self.learning_config.enabled and self.learning_config.auto_learn:
+                    skip_rule_generation = rule_failed and rule_found
+                    if skip_rule_generation:
+                        self.logger.info(
+                            "[RULE_GENERATION_SKIPPED] Existing rule '%s' failed (%s); "
+                            "skipping auto-learning for this field.",
+                            failed_rule_id,
+                            failed_rule_reason,
+                        )
+                    if (
+                        self.learning_config.enabled
+                        and self.learning_config.auto_learn
+                        and not skip_rule_generation
+                    ):
                         # Create signature for this field
                         opts_fp = options_fingerprint(options) if options else None
                         q_norm = self.normalizer.normalize_text(question)
@@ -271,9 +340,27 @@ class RulesEngine:
                         
                         if self.learning_config.use_separate_rule_generation:
                             try:
-                                self.logger.debug("Generating rule using separate LLM request")
+                                # Determine delegation reason for rule generation context
+                                delegation_reason = f"Rule '{rule.get('id')}' found but failed to produce valid value" if rule_found and rule else "No matching rule found"
+                                
+                                self.logger.info(
+                                    f"[RULE_GENERATION_START] Starting rule generation for field: "
+                                    f"question='{question}', field_type='{field_type}', "
+                                    f"selected_value='{llm_decision.value}', confidence={llm_decision.confidence:.2f}, "
+                                    f"decision='{llm_decision.decision}', reason='{delegation_reason}'"
+                                )
+                                
+                                # Add LLM decision context to field_info for rule generation
+                                field_info_for_rule = field_info.copy()
+                                field_info_for_rule.update({
+                                    "llm_decision": llm_decision.decision,
+                                    "llm_confidence": llm_decision.confidence,
+                                    "delegation_reason": delegation_reason,
+                                    "q_norm": q_norm,  # Normalized question for pattern generation
+                                })
+                                
                                 rule_suggestion = await self.llm_delegate.generate_rule(
-                                    field_info=field_info,
+                                    field_info=field_info_for_rule,
                                     selected_value=llm_decision.value,
                                     profile=self.profile,
                                     job_context=None  # Can be extended to pass job_context if available
@@ -290,23 +377,57 @@ class RulesEngine:
                                     }
                                     rule_confidence = rule_suggestion.confidence
                                     self.logger.info(
-                                        f"Rule generated successfully: pattern='{rule_suggestion.q_pattern}', "
+                                        f"[RULE_GENERATION_SUCCESS] Rule generated successfully: "
+                                        f"pattern='{rule_suggestion.q_pattern}', "
                                         f"strategy={rule_suggestion.strategy.kind}, "
+                                        f"strategy_params={rule_suggestion.strategy.params}, "
                                         f"confidence={rule_suggestion.confidence:.2f}"
                                     )
                                 else:
-                                    self.logger.warning("Rule generation returned None")
+                                    self.logger.warning("[RULE_GENERATION_FAILED] Rule generation returned None")
                             except Exception as e:
-                                self.logger.error(f"Rule generation failed: {e}", exc_info=True)
+                                self.logger.error(
+                                    f"[RULE_GENERATION_ERROR] Rule generation failed: {e}", 
+                                    exc_info=True
+                                )
                         
                         # Fallback to suggest_rule from decision if separate generation failed and fallback is enabled
                         if not suggest_rule and self.learning_config.rule_generation_fallback:
                             if llm_decision.suggest_rule and llm_decision.suggest_rule.get("q_pattern"):
                                 suggest_rule = llm_decision.suggest_rule
-                                self.logger.info("Using suggest_rule from LLM decision as fallback")
+                                self.logger.info(
+                                    f"[RULE_GENERATION_FALLBACK] Using suggest_rule from LLM decision as fallback: "
+                                    f"pattern='{suggest_rule.get('q_pattern')}', "
+                                    f"strategy={suggest_rule.get('strategy', {}).get('kind')}"
+                                )
+                            else:
+                                self.logger.warning(
+                                    "[RULE_GENERATION_FALLBACK] Fallback enabled but suggest_rule not available in LLM decision"
+                                )
                         
                         # Process the rule if we have one
                         if suggest_rule:
+                            # For literal strategies, prefer decision confidence if it's higher
+                            # This helps preserve rules that LLM is confident about but rule generation isn't
+                            strategy_kind = suggest_rule.get("strategy", {}).get("kind")
+                            if strategy_kind in ("literal", "one_of_options"):
+                                # Use the decision confidence if it's higher than rule confidence
+                                # This handles cases where LLM is confident about the value but rule generation
+                                # returns lower confidence due to fallback mechanisms
+                                if llm_decision.confidence > rule_confidence:
+                                    self.logger.info(
+                                        f"[RULE_CONFIDENCE_ADJUST] Using decision confidence {llm_decision.confidence:.2f} "
+                                        f"instead of rule confidence {rule_confidence:.2f} for {strategy_kind}"
+                                    )
+                                    rule_confidence = llm_decision.confidence
+                            
+                            self.logger.info(
+                                f"[RULE_PROCESSING_START] Processing rule suggestion: "
+                                f"pattern='{suggest_rule.get('q_pattern')}', "
+                                f"strategy={strategy_kind}, "
+                                f"confidence={rule_confidence:.2f}"
+                            )
+                            
                             # Create a temporary LLMDecision-like object with the rule
                             rule_decision = LLMDecision(
                                 decision=llm_decision.decision,
@@ -359,23 +480,45 @@ class RulesEngine:
         
         # Check 1: Is there a suggestion?
         if not suggest_rule:
-            self.logger.debug("No rule suggestion from LLM")
+            self.logger.debug("[RULE_VALIDATION] No rule suggestion from LLM - skipping")
             return
         
         # Check 2: Is confidence sufficient?
-        if confidence < self.learning_config.confidence_threshold:
+        # For literal strategies, use a slightly lower threshold since they're deterministic
+        # and the value is known to work
+        strategy_kind = suggest_rule.get("strategy", {}).get("kind")
+        effective_threshold = self.learning_config.confidence_threshold
+        if strategy_kind == "literal":
+            # Lower threshold for literal strategies (they're deterministic)
+            effective_threshold = max(0.6, self.learning_config.confidence_threshold - 0.15)
+            self.logger.debug(
+                f"Using lower threshold {effective_threshold:.2f} for literal strategy "
+                f"(base threshold: {self.learning_config.confidence_threshold:.2f})"
+            )
+        
+        if confidence < effective_threshold:
             self.logger.warning(
-                f"Rule suggestion rejected: confidence {confidence:.2f} "
-                f"below threshold {self.learning_config.confidence_threshold}"
+                f"[RULE_VALIDATION_REJECTED] Rule suggestion rejected: confidence {confidence:.2f} "
+                f"below threshold {effective_threshold:.2f}. "
+                f"Rule: pattern='{suggest_rule.get('q_pattern')}', strategy={strategy_kind}"
             )
             return
         
         # Check 3: Validate structure
         if self.learning_config.enable_pattern_validation or self.learning_config.enable_strategy_validation:
+            self.logger.debug(
+                f"[RULE_VALIDATION] Validating rule: pattern='{suggest_rule.get('q_pattern')}', "
+                f"strategy={suggest_rule.get('strategy', {}).get('kind')}"
+            )
             is_valid, error_msg = self.rule_validator.validate(suggest_rule)
             if not is_valid:
-                self.logger.warning(f"Rule suggestion validation failed: {error_msg}")
+                self.logger.warning(
+                    f"[RULE_VALIDATION_FAILED] Rule suggestion validation failed: {error_msg}. "
+                    f"Rule: pattern='{suggest_rule.get('q_pattern')}', strategy={suggest_rule.get('strategy', {}).get('kind')}"
+                )
                 return
+            else:
+                self.logger.debug("[RULE_VALIDATION] Rule validation passed")
             
             # Additional validation: check if params are empty for strategies that require them
             strategy = suggest_rule.get("strategy", {})
@@ -411,9 +554,15 @@ class RulesEngine:
         # Check 4: Check for duplicates
         if self.learning_config.enable_duplicate_check:
             q_pattern = suggest_rule.get("q_pattern", "")
+            self.logger.debug(f"[RULE_DUPLICATE_CHECK] Checking for duplicates: pattern='{q_pattern}'")
             if self.rule_store.is_duplicate_rule(signature, q_pattern):
-                self.logger.info(f"Duplicate rule detected, skipping: {q_pattern}")
+                self.logger.info(
+                    f"[RULE_DUPLICATE_FOUND] Duplicate rule detected, skipping: pattern='{q_pattern}', "
+                    f"field_type='{signature.field_type}'"
+                )
                 return
+            else:
+                self.logger.debug("[RULE_DUPLICATE_CHECK] No duplicate found")
         
         # All checks passed - add the rule
         try:
@@ -424,8 +573,10 @@ class RulesEngine:
             )
             
             self.logger.info(
-                f"✅ New rule learned and saved: {new_rule['id']} "
-                f"(pattern='{suggest_rule.get('q_pattern')}', confidence={confidence:.2f})"
+                f"✅ [RULE_SAVED] New rule learned and saved: {new_rule['id']} "
+                f"(pattern='{suggest_rule.get('q_pattern')}', strategy={suggest_rule.get('strategy', {}).get('kind')}, "
+                f"params={suggest_rule.get('strategy', {}).get('params')}, confidence={confidence:.2f}, "
+                f"field_type={signature.field_type}, q_norm='{signature.q_norm}')"
             )
         except Exception as e:
             self.logger.error(f"Failed to add LLM rule: {e}", exc_info=True)

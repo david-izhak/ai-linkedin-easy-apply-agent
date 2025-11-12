@@ -395,3 +395,6 @@ rule_store = RuleStore("config/rules.yaml")
 - [Интеграция с LLM](llm-integration.md)
 - [Структура проекта](project-structure.md)
 
+
+
+

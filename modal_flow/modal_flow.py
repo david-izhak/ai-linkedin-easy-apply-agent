@@ -7,6 +7,7 @@ resolving fields, and controlling the flow between multiple modal steps.
 
 import re
 import logging
+from pathlib import Path
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 
@@ -66,7 +67,8 @@ class ModalFlowRunner:
         normalizer: Optional[QuestionNormalizer] = None,
         llm_delegate: Optional[Any] = None,  # Will be BaseLLMDelegate type
         learning_config: Optional[LearningConfig] = None,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
+        capture_screenshots: bool = True,
     ):
         """
         Initialize ModalFlowRunner.
@@ -87,6 +89,7 @@ class ModalFlowRunner:
         self.llm_delegate = llm_delegate
         self.logger = logger or logging.getLogger(__name__)
         self._document_uploader: Optional[ModalDocumentUploader] = None
+        self.capture_screenshots = capture_screenshots
         
         # Initialize RulesEngine with learning_config
         self.rules_engine = RulesEngine(
@@ -130,8 +133,11 @@ class ModalFlowRunner:
                 lazy_generator=lazy_generator,
             )
         
+        previous_progress_percentage: Optional[int] = None
+
         for step in range(max_steps):
-            self.logger.info(f"Processing step {step + 1}/{max_steps}")
+            self.logger.info(f"[MODAL_FLOW_STEP] Processing step {step + 1}/{max_steps}")
+            is_same_dialog = False
             
             # Wait for spinners to disappear
             await self._wait_for_spinners_to_disappear()
@@ -139,7 +145,7 @@ class ModalFlowRunner:
             # Find active modal
             modal = await self._active_modal()
             if not modal:
-                self.logger.info("No active modal found. Ending run.")
+                self.logger.info("[MODAL_FLOW_STEP] No active modal found. Ending run.")
                 result = ModalFlowRunResult(
                     completed=True,
                     submitted=False,
@@ -152,20 +158,118 @@ class ModalFlowRunner:
             # Store reference to current modal for transition detection
             stale_modal_reference = modal
             
+            # Try to get modal text for logging
+            try:
+                modal_text = await modal.inner_text()
+                modal_text_preview = modal_text[:200] + "..." if len(modal_text) > 200 else modal_text
+                self.logger.info(f"[MODAL_FLOW_STEP] Modal content preview: {modal_text_preview}")
+                
+                current_progress_percentage = await self._extract_progress_percentage_from_text(modal_text)
+                if current_progress_percentage is not None:
+                    self.logger.info(f"[PROGRESS] Current dialog progress: {current_progress_percentage}%")
+                    if previous_progress_percentage is not None:
+                        if current_progress_percentage == previous_progress_percentage:
+                            is_same_dialog = True
+                            self.logger.warning(
+                                f"[DIALOG_CHECK] Dialog did not change after Next click (progress still "
+                                f"{current_progress_percentage}%). Will skip already filled fields."
+                            )
+                        else:
+                            self.logger.info(
+                                f"[DIALOG_CHECK] Dialog changed: "
+                                f"{previous_progress_percentage}% -> {current_progress_percentage}%"
+                            )
+                    previous_progress_percentage = current_progress_percentage
+                else:
+                    self.logger.debug(
+                        "[PROGRESS] Progress percentage not found in modal text; cannot detect dialog change."
+                    )
+            except Exception as e:
+                self.logger.debug(f"[MODAL_FLOW_STEP] Could not get modal text: {e}")
+            
             # Fill all fields in current modal
-            await self._fill_modal(modal)
+            self.logger.info(f"[MODAL_FLOW_STEP] Filling fields in step {step + 1} (is_same_dialog={is_same_dialog})")
+            
+            # Capture screenshot before filling
+            if self.capture_screenshots:
+                try:
+                    screenshots_dir = Path("screenshots/modal_flow_debug")
+                    screenshots_dir.mkdir(parents=True, exist_ok=True)
+                    screenshot_path = screenshots_dir / f"step_{step + 1:02d}_before_fill.png"
+                    await self.page.screenshot(path=str(screenshot_path), full_page=True)
+                    self.logger.info(f"[SCREENSHOT] Saved: {screenshot_path}")
+                except Exception as e:
+                    self.logger.debug(f"[SCREENSHOT] Failed to capture screenshot: {e}")
+            
+            await self._fill_modal(modal, is_same_dialog=is_same_dialog)
+            self.logger.info(f"[MODAL_FLOW_STEP] Fields filled in step {step + 1}")
+            
+            # Capture screenshot after filling
+            if self.capture_screenshots:
+                try:
+                    screenshots_dir = Path("screenshots/modal_flow_debug")
+                    screenshots_dir.mkdir(parents=True, exist_ok=True)
+                    screenshot_path = screenshots_dir / f"step_{step + 1:02d}_after_fill.png"
+                    await self.page.screenshot(path=str(screenshot_path), full_page=True)
+                    self.logger.info(f"[SCREENSHOT] Saved: {screenshot_path}")
+                except Exception as e:
+                    self.logger.debug(f"[SCREENSHOT] Failed to capture screenshot: {e}")
             
             # Check for Submit button first (higher priority)
-            submit_btn = modal.get_by_role("button", name=SUBMIT_BTN_RX).first
-            if await submit_btn.is_visible():
+            # Try multiple ways to find submit button
+            submit_btn = None
+            submit_btn_text = None
+            
+            # Method 1: By role with regex
+            try:
+                submit_btn_candidates = modal.get_by_role("button", name=SUBMIT_BTN_RX)
+                submit_count = await submit_btn_candidates.count()
+                if submit_count > 0:
+                    submit_btn = submit_btn_candidates.first
+                    if await submit_btn.is_visible():
+                        submit_btn_text = await submit_btn.inner_text()
+                        self.logger.info(f"[SUBMIT_CHECK] Submit button found by role: '{submit_btn_text}'")
+                    else:
+                        submit_btn = None
+            except Exception as e:
+                self.logger.debug(f"[SUBMIT_CHECK] Could not find submit button by role: {e}")
+                submit_btn = None
+            
+            # Method 2: Try to find by text content if method 1 failed
+            if not submit_btn:
+                try:
+                    # Get all buttons and check their text
+                    all_buttons = modal.get_by_role("button")
+                    button_count = await all_buttons.count()
+                    self.logger.debug(f"[SUBMIT_CHECK] Checking {button_count} buttons for submit button")
+                    
+                    for i in range(button_count):
+                        btn = all_buttons.nth(i)
+                        try:
+                            if await btn.is_visible():
+                                btn_text = await btn.inner_text()
+                                btn_text_lower = btn_text.lower().strip()
+                                # Check if button text matches submit pattern
+                                if SUBMIT_BTN_RX.search(btn_text_lower):
+                                    submit_btn = btn
+                                    submit_btn_text = btn_text
+                                    self.logger.info(f"[SUBMIT_CHECK] Submit button found by text: '{submit_btn_text}'")
+                                    break
+                        except Exception:
+                            # Skip buttons that can't be checked
+                            continue
+                except Exception as e:
+                    self.logger.debug(f"[SUBMIT_CHECK] Could not find submit button by text: {e}")
+            
+            if submit_btn and submit_btn_text:
                 if should_submit:
-                    self.logger.info("Submit button found, clicking.")
+                    self.logger.info(f"[SUBMIT] Submit button found: '{submit_btn_text}', clicking.")
                     await self._safe_click(submit_btn)
                     self.logger.info("Submit button clicked. Flow finished.")
                     submitted = True
                 else:
                     self.logger.info(
-                        "Submit button found, skipping click due to DRY RUN mode."
+                        f"[SUBMIT] Submit button found: '{submit_btn_text}', skipping click due to DRY RUN mode."
                     )
                     submitted = False
                 result = ModalFlowRunResult(
@@ -176,6 +280,8 @@ class ModalFlowRunner:
                 )
                 self._document_uploader = None
                 return result
+            else:
+                self.logger.debug(f"[SUBMIT_CHECK] Submit button not found in step {step + 1}")
             
             # Look for Next button
             next_btn = modal.get_by_role("button", name=NEXT_BTN_RX).first
@@ -269,27 +375,61 @@ class ModalFlowRunner:
         # Return the last visible dialog (most likely the active one)
         return dialogs.nth(count - 1)
     
-    async def _fill_modal(self, modal: Locator):
+    def _extract_progress_percentage_from_text(self, modal_text: str) -> Optional[int]:
+        """
+        Extract the progress percentage (e.g., '44%') from modal text.
+        
+        Args:
+            modal_text: Text content of the modal.
+        
+        Returns:
+            Integer percentage (0-100) if found, otherwise None.
+        """
+        match = re.search(r"(\d{1,3})%", modal_text)
+        if not match:
+            return None
+        try:
+            percentage = int(match.group(1))
+            if 0 <= percentage <= 100:
+                return percentage
+        except ValueError:
+            pass
+        return None
+    
+    async def _fill_modal(self, modal: Locator, is_same_dialog: bool = False):
         """
         Fill all fields in the current modal.
         
         Args:
             modal: Locator for the modal dialog
+            is_same_dialog: Indicates if the dialog content did not change after Next click
         """
-        self.logger.debug("Filling modal fields")
+        self.logger.info(f"[MODAL_FILL] Starting to fill modal fields (is_same_dialog={is_same_dialog})")
+        if is_same_dialog:
+            self.logger.warning(
+                "[MODAL_FILL] Same dialog detected after navigation. "
+                "Skipping fields that are already filled."
+            )
         
         # Attach documents if required before filling other fields
         if self._document_uploader:
+            self.logger.info("[MODAL_FILL] Handling document upload")
             await self._document_uploader.handle_modal(modal)
 
         # Process fields in order: radio groups, checkboxes, comboboxes, number inputs, textboxes
-        await self._handle_radio_groups(modal)
-        await self._handle_checkboxes(modal)
-        await self._handle_comboboxes(modal)
-        await self._handle_number_inputs(modal)
-        await self._handle_textboxes(modal)
+        self.logger.info("[MODAL_FILL] Processing radio groups")
+        await self._handle_radio_groups(modal, is_same_dialog=is_same_dialog)
+        self.logger.info("[MODAL_FILL] Processing checkboxes")
+        await self._handle_checkboxes(modal, is_same_dialog=is_same_dialog)
+        self.logger.info("[MODAL_FILL] Processing comboboxes")
+        await self._handle_comboboxes(modal, is_same_dialog=is_same_dialog)
+        self.logger.info("[MODAL_FILL] Processing number inputs")
+        await self._handle_number_inputs(modal, is_same_dialog=is_same_dialog)
+        self.logger.info("[MODAL_FILL] Processing textboxes")
+        await self._handle_textboxes(modal, is_same_dialog=is_same_dialog)
+        self.logger.info("[MODAL_FILL] Finished filling modal fields")
     
-    async def _handle_radio_groups(self, modal: Locator):
+    async def _handle_radio_groups(self, modal: Locator, is_same_dialog: bool = False):
         """Handle radio button groups."""
         # Wait for all radio buttons to be loaded (they might load dynamically)
         # Try to wait for at least one radio button to appear, then wait a bit more
@@ -348,6 +488,14 @@ class ModalFlowRunner:
             # or it's a "deselect" option for a single pre-selected item, skip.
             if checked_item:
                 label = await self._label_for(checked_item)
+                # Skip if dialog unchanged and we already have a selection
+                if is_same_dialog:
+                    option_label = await self._get_radio_option_text(checked_item) or label
+                    self.logger.info(
+                        f"[RADIO_GROUP] Skipping already filled radio group '{name}' "
+                        f"(selected='{option_label}') due to unchanged dialog."
+                    )
+                    continue
                 # The assumption here is that if a single option is already checked,
                 # no further action is needed. The "deselect" check makes it more robust.
                 if len(items) == 1 or 'deselect' in label.lower():
@@ -361,52 +509,115 @@ class ModalFlowRunner:
 
             question = await self._infer_group_question(items[0])
             options = []
+            option_map = {}  # Map normalized option text to radio locator
             
             for item in items:
-                label = await self._label_for(item)
-                options.append(label)
+                # Use _get_radio_option_text to extract option text (e.g., "Yes", "No")
+                # instead of question text
+                option_text = await self._get_radio_option_text(item)
+                if not option_text:
+                    # Fallback: try _label_for, but filter out question text
+                    label_text = await self._label_for(item)
+                    # If label_text is very long, it's likely the question, not the option
+                    # Try to extract just the option part
+                    if len(label_text) > 100:
+                        # Split by newlines and take the last short line
+                        lines = label_text.split('\n')
+                        for line in reversed(lines):
+                            line = line.strip()
+                            if line and len(line) < 50 and 'required' not in line.lower():
+                                # Skip question-like lines
+                                if not any(word in line.lower() for word in ['are you', 'do you', 'have you']):
+                                    option_text = line
+                                    break
+                    else:
+                        option_text = label_text
+                
+                if option_text:
+                    options.append(option_text)
+                    # Store mapping for later use when selecting
+                    normalized_option = self.normalizer.normalize_string(option_text).lower()
+                    option_map[normalized_option] = item
             
             self.logger.info(
-                f"Processing radio group '{name}': question='{question}', options={options}"
+                f"[RADIO_GROUP] Processing radio group '{name}': question='{question}', options={options}"
             )
             
             # Call RulesEngine to decide
+            self.logger.info(
+                f"[RADIO_GROUP] Calling rules_engine.decide for question='{question}', field_type='radio'"
+            )
             decision = await self.rules_engine.decide(
                 question=question,
                 field_type="radio",
                 options=options
             )
+            self.logger.info(
+                f"[RADIO_GROUP] RulesEngine decision: {decision} for question='{question}'"
+            )
             selected_option = decision if decision else (options[0] if options else None)
             
-            normalized_target_option = self.normalizer.normalize_string(selected_option)
+            if selected_option:
+                normalized_target_option = self.normalizer.normalize_string(selected_option).lower()
 
-            # Log radio group details
-            self.logger.debug(
-                f"Radio group '{question}': options={options}, selected='{selected_option}', normalized='{normalized_target_option}'"
-            )
+                # Log radio group details
+                self.logger.debug(
+                    f"Radio group '{question}': options={options}, selected='{selected_option}', normalized='{normalized_target_option}'"
+                )
 
-            # Find matching option index and click
-            for item in items:
-                label = await self._label_for(item)
-                normalized_label = self.normalizer.normalize_string(label)
-                if normalized_label == normalized_target_option:
-                    await item.check(force=True)
+                # Find matching option and click using the option_map
+                matched_radio = None
+                if normalized_target_option in option_map:
+                    matched_radio = option_map[normalized_target_option]
+                else:
+                    # Fallback: try to find by matching normalized option text
+                    for item in items:
+                        option_text = await self._get_radio_option_text(item)
+                        if not option_text:
+                            option_text = await self._label_for(item)
+                        normalized_label = self.normalizer.normalize_string(option_text).lower()
+                        if normalized_label == normalized_target_option:
+                            matched_radio = item
+                            break
+                
+                if matched_radio:
+                    await matched_radio.check(force=True)
                     # Verify
-                    await expect(item).to_be_checked()
-                    break
+                    await expect(matched_radio).to_be_checked()
+                    self.logger.info(f"Selected radio option '{selected_option}' for question '{question}'")
+                else:
+                    self.logger.warning(
+                        f"Could not find matching radio button for option '{selected_option}' "
+                        f"in group '{question}'. Available options: {options}"
+                    )
+            else:
+                self.logger.warning(
+                    f"No decision made for radio group '{question}'. Available options: {options}"
+                )
     
-    async def _handle_checkboxes(self, modal: Locator):
+    async def _handle_checkboxes(self, modal: Locator, is_same_dialog: bool = False):
         """Handle checkbox fields."""
         boxes = modal.get_by_role("checkbox")
         count = await boxes.count()
         
         for i in range(count):
             cb = boxes.nth(i)
-            label = await self._label_for(cb)
+            question = await self._compose_checkbox_question(cb)
+            
+            if is_same_dialog:
+                try:
+                    if await cb.is_checked():
+                        self.logger.info(
+                            f"[CHECKBOX] Skipping already filled checkbox for question '{question}' "
+                            "due to unchanged dialog."
+                        )
+                        continue
+                except Exception as e:
+                    self.logger.debug(f"[CHECKBOX] Could not determine checkbox state: {e}")
             
             # Call RulesEngine to decide
             decision = await self.rules_engine.decide(
-                question=label,
+                question=question,
                 field_type="checkbox",
                 options=None
             )
@@ -416,7 +627,86 @@ class ModalFlowRunner:
                 await cb.check(force=True)
                 await expect(cb).to_be_checked()
     
-    async def _handle_comboboxes(self, modal: Locator):
+    async def _compose_checkbox_question(self, checkbox: Locator) -> str:
+        """
+        Build a descriptive question for a checkbox using both legend and label.
+        """
+        legend_text = await self._extract_checkbox_legend(checkbox)
+        label_text = await self._extract_checkbox_label(checkbox)
+
+        parts = []
+        if legend_text:
+            parts.append(f"legend: {legend_text}")
+        if label_text:
+            parts.append(f"label: {label_text}")
+
+        if not parts:
+            fallback = await self._label_for(checkbox)
+            if fallback:
+                return fallback
+            self.logger.debug("Checkbox question fallback produced empty string.")
+            return ""
+
+        return ". ".join(parts)
+
+    async def _extract_checkbox_legend(self, checkbox: Locator) -> str:
+        """
+        Retrieve legend text associated with a checkbox (if any).
+        """
+        legend_text = await checkbox.evaluate(
+            """(el) => {
+                const fieldset = el.closest('fieldset');
+                if (!fieldset) return '';
+                const legend = fieldset.querySelector('legend');
+                if (!legend) return '';
+                return legend.innerText ? legend.innerText.trim() : '';
+            }"""
+        )
+        return legend_text or ""
+
+    async def _extract_checkbox_label(self, checkbox: Locator) -> str:
+        """
+        Retrieve label text associated with a checkbox input.
+        """
+        label_text = await checkbox.evaluate(
+            """(el) => {
+                const doc = el.ownerDocument;
+                const id = el.id;
+                if (!id) return '';
+
+                const escape = doc.defaultView && doc.defaultView.CSS && doc.defaultView.CSS.escape
+                    ? doc.defaultView.CSS.escape
+                    : (value) => value.replace(/([\\:\\[\\]\\.\\#\\(\\)])/g, '\\\\$1');
+
+                try {
+                    const label = doc.querySelector('label[for=\"' + escape(id) + '\"]');
+                    if (label && label.innerText) {
+                        return label.innerText.trim();
+                    }
+                } catch (e) {
+                    /* ignore */
+                }
+
+                const container = el.closest('[data-test-text-selectable-option]');
+                if (container) {
+                    const labelCandidate = container.querySelector('label');
+                    if (labelCandidate && labelCandidate.innerText) {
+                        return labelCandidate.innerText.trim();
+                    }
+                }
+
+                return '';
+            }"""
+        )
+
+        if label_text:
+            return label_text
+
+        # Fallback to existing label extraction logic
+        fallback = await self._label_for(checkbox)
+        return fallback or ""
+    
+    async def _handle_comboboxes(self, modal: Locator, is_same_dialog: bool = False):
         """Handle combobox and select fields."""
         # Handle custom comboboxes (with listbox)
         combos = modal.get_by_role("combobox").and_(modal.locator(":not(select)"))
@@ -425,7 +715,20 @@ class ModalFlowRunner:
         for i in range(combo_count):
             combo = combos.nth(i)
             question = await self._label_for(combo)
-            await self._process_single_combobox(combo, question)
+            
+            if is_same_dialog:
+                try:
+                    current_value = await combo.input_value()
+                    if current_value and current_value.strip():
+                        self.logger.info(
+                            f"[COMBOBOX] Skipping already filled combobox '{question}' "
+                            f"with value '{current_value}' due to unchanged dialog."
+                        )
+                        continue
+                except Exception as e:
+                    self.logger.debug(f"[COMBOBOX] Could not determine combobox value: {e}")
+            
+            await self._process_single_combobox(combo, question, modal, is_same_dialog=is_same_dialog)
         
         # Handle native select elements
         selects = modal.locator("select")
@@ -434,6 +737,27 @@ class ModalFlowRunner:
         for i in range(select_count):
             sel = selects.nth(i)
             question = await self._label_for(sel)
+
+            if is_same_dialog:
+                try:
+                    selected_value = await sel.evaluate("(el) => el.value")
+                    if selected_value and str(selected_value).strip():
+                        self.logger.info(
+                            f"[SELECT] Skipping already filled select '{question}' "
+                            f"with value '{selected_value}' due to unchanged dialog."
+                        )
+                        continue
+                    selected_text = await sel.evaluate(
+                        "(el) => { const opt = el.options[el.selectedIndex]; return opt ? opt.text : ''; }"
+                    )
+                    if selected_text and selected_text.strip():
+                        self.logger.info(
+                            f"[SELECT] Skipping already filled select '{question}' "
+                            f"with option '{selected_text}' due to unchanged dialog."
+                        )
+                        continue
+                except Exception as e:
+                    self.logger.debug(f"[SELECT] Could not determine select state: {e}")
 
             options = []
             option_locators = await sel.locator("option").all()
@@ -469,14 +793,20 @@ class ModalFlowRunner:
                         f"Could not find option for '{normalized_target_option}'"
                     )
     
-    async def _process_single_combobox(self, combo: Locator, question: str) -> None:
+    async def _process_single_combobox(
+        self,
+        combo: Locator,
+        question: str,
+        modal: Locator,
+        is_same_dialog: bool = False,
+    ) -> None:
         """
         Process a single combobox field with improved logic for dynamic listboxes.
         
         This method implements the following algorithm:
         1. Get initial value from RulesEngine
         2. Fill the combobox to trigger the listbox appearance
-        3. Wait for and detect the listbox
+        3. Wait for and detect the listbox (scoped to modal)
         4. Find best matching option from the listbox
         5. Select the option by clicking on it
         6. Verify the selection was successful
@@ -484,15 +814,27 @@ class ModalFlowRunner:
         Args:
             combo: Locator for the combobox element
             question: Label/question text for the field
+            modal: Locator for the modal dialog (to scope listbox search)
         """
-        self.logger.debug(f"Processing combobox: '{question}'")
+        self.logger.debug(f"Processing combobox: '{question}' (is_same_dialog={is_same_dialog})")
+        
+        if is_same_dialog:
+            try:
+                current_value = await combo.input_value()
+                if current_value and current_value.strip():
+                    self.logger.info(
+                        f"[COMBOBOX] Skipping already filled combobox '{question}' "
+                        f"with value '{current_value}' due to unchanged dialog."
+                    )
+                    return
+            except Exception as e:
+                self.logger.debug(f"[COMBOBOX] Could not determine combobox value inside handler: {e}")
         
         # Step 1: Get initial decision from RulesEngine (without options)
-        # This will use rules or delegate to LLM if no rule matches
         initial_decision = await self.rules_engine.decide(
             question=question,
             field_type="combobox",
-            options=None  # We don't have options yet
+            options=None
         )
         
         if not initial_decision:
@@ -515,9 +857,107 @@ class ModalFlowRunner:
             self.logger.error(f"Failed to fill combobox '{question}': {e}")
             return
         
-        # Step 3: Try to find and wait for the listbox
+        # Step 3: Try to find and wait for the listbox - ONLY IN MODAL
+        listbox = None
+        
         try:
-            listbox = self.page.get_by_role("listbox")
+            # Strategy 1: Try to find LinkedIn-specific typeahead listbox by ID pattern in modal
+            # This is the most reliable - LinkedIn uses IDs like "triggered-expanded-emberXXX"
+            try:
+                typeahead_listbox = modal.locator('[id^="triggered-expanded-"][role="listbox"]')
+                listbox_count = await typeahead_listbox.count()
+                
+                if listbox_count > 0:
+                    # Wait for the first (and usually only) visible listbox in modal
+                    for i in range(listbox_count):
+                        candidate = typeahead_listbox.nth(i)
+                        try:
+                            if await candidate.is_visible():
+                                listbox = candidate
+                                self.logger.debug(f"Found LinkedIn typeahead listbox by ID pattern in modal for '{question}'")
+                                break
+                        except Exception:
+                            continue
+            except Exception as e:
+                self.logger.debug(f"Typeahead listbox by ID pattern search failed: {e}")
+            
+            # Strategy 2: Try to find listbox by LinkedIn-specific classes in modal
+            if not listbox:
+                try:
+                    class_listbox = modal.locator(
+                        'div.basic-typeahead__triggered-content.fb-single-typeahead-entity__triggered-content[role="listbox"]'
+                    )
+                    listbox_count = await class_listbox.count()
+                    
+                    if listbox_count > 0:
+                        for i in range(listbox_count):
+                            candidate = class_listbox.nth(i)
+                            try:
+                                if await candidate.is_visible():
+                                    listbox = candidate
+                                    self.logger.debug(f"Found LinkedIn typeahead listbox by classes in modal for '{question}'")
+                                    break
+                            except Exception:
+                                continue
+                except Exception as e:
+                    self.logger.debug(f"Typeahead listbox by classes search failed: {e}")
+            
+            # Strategy 3: Find listbox in modal context (excluding select elements)
+            if not listbox:
+                try:
+                    # Get all listboxes in modal, excluding native select elements
+                    modal_listboxes = modal.locator('[role="listbox"]:not(select)')
+                    listbox_count = await modal_listboxes.count()
+                    
+                    if listbox_count == 1:
+                        # Only one listbox in modal - use it
+                        listbox = modal_listboxes.first
+                        # Verify it's visible
+                        if await listbox.is_visible():
+                            self.logger.debug(f"Found single listbox in modal for '{question}'")
+                        else:
+                            listbox = None
+                    elif listbox_count > 1:
+                        # Multiple listboxes - find the one that's visible and closest to combobox
+                        self.logger.debug(f"Found {listbox_count} listboxes in modal, selecting the visible one")
+                        
+                        for i in range(listbox_count):
+                            candidate = modal_listboxes.nth(i)
+                            try:
+                                if await candidate.is_visible():
+                                    # Prefer typeahead listboxes (they have specific classes/IDs)
+                                    candidate_id = await candidate.get_attribute("id")
+                                    candidate_class = await candidate.get_attribute("class") or ""
+                                    
+                                    if candidate_id and candidate_id.startswith("triggered-expanded-"):
+                                        listbox = candidate
+                                        self.logger.debug(f"Selected typeahead listbox by ID '{candidate_id}' for '{question}'")
+                                        break
+                                    elif "typeahead" in candidate_class or "fb-single-typeahead" in candidate_class:
+                                        listbox = candidate
+                                        self.logger.debug(f"Selected typeahead listbox by class for '{question}'")
+                                        break
+                            except Exception:
+                                continue
+                        
+                        # If still no listbox, use first visible one
+                        if not listbox:
+                            for i in range(listbox_count):
+                                candidate = modal_listboxes.nth(i)
+                                try:
+                                    if await candidate.is_visible():
+                                        listbox = candidate
+                                        self.logger.debug(f"Selected first visible listbox for '{question}'")
+                                        break
+                                except Exception:
+                                    continue
+                except Exception as e:
+                    self.logger.debug(f"Modal listbox search failed: {e}")
+            
+            if not listbox:
+                raise Exception("No listbox found in modal context")
+            
+            # Wait for listbox to be fully visible
             await listbox.wait_for(state="visible", timeout=2000)
             
             # Step 4: Extract all options from the listbox
@@ -527,7 +967,8 @@ class ModalFlowRunner:
             for opt_loc in option_locators:
                 try:
                     opt_text = await opt_loc.inner_text()
-                    options.append(opt_text.strip())
+                    if opt_text and opt_text.strip():
+                        options.append(opt_text.strip())
                 except Exception:
                     continue
             
@@ -545,18 +986,47 @@ class ModalFlowRunner:
                 
                 # Click on the matching option
                 try:
-                    # Try exact match first
-                    await listbox.get_by_role("option", name=re.compile(f"^{re.escape(best_match)}$")).first.click(timeout=1000)
-                except Exception:
-                    # Fallback to contains match
-                    try:
-                        await listbox.get_by_role("option").filter(has_text=best_match).first.click(timeout=1000)
-                    except Exception as e:
-                        self.logger.error(f"Failed to click option '{best_match}': {e}")
+                    # Try to find option by exact text match (case-insensitive)
+                    option_found = False
+                    for opt_loc in option_locators:
+                        try:
+                            opt_text = await opt_loc.inner_text()
+                            if opt_text and opt_text.strip().lower() == best_match.lower():
+                                await opt_loc.click(timeout=1000)
+                                option_found = True
+                                break
+                        except Exception:
+                            continue
+                    
+                    # If exact match not found, try contains match
+                    if not option_found:
+                        for opt_loc in option_locators:
+                            try:
+                                opt_text = await opt_loc.inner_text()
+                                if opt_text and best_match.lower() in opt_text.lower():
+                                    await opt_loc.click(timeout=1000)
+                                    option_found = True
+                                    break
+                            except Exception:
+                                continue
+                    
+                    if not option_found:
+                        self.logger.error(f"Failed to click option '{best_match}' - option not found in listbox")
                         return
+                        
+                except Exception as e:
+                    self.logger.error(f"Failed to click option '{best_match}': {e}")
+                    return
                 
-                # Step 6: Verify the value was set
-                await self.page.wait_for_timeout(200)
+                # Step 6: Wait for listbox to close and verify the value was set
+                await self.page.wait_for_timeout(300)
+                try:
+                    # Wait for listbox to disappear (indicates selection was successful)
+                    await listbox.wait_for(state="hidden", timeout=2000)
+                except Exception:
+                    # Listbox might not disappear immediately, that's okay
+                    pass
+                
                 try:
                     current_value = await combo.input_value()
                     self.logger.debug(f"Combobox '{question}' value after selection: '{current_value}'")
@@ -567,9 +1037,9 @@ class ModalFlowRunner:
                 self.logger.warning(f"No matching option found in listbox for '{search_text}'")
                 
         except Exception as e:
-            # Listbox did not appear - treat as a simple text input
+            # Listbox did not appear or was not found - treat as a simple text input
             self.logger.warning(
-                f"Combobox '{question}' did not open a listbox (timeout or error). "
+                f"Combobox '{question}' did not open a listbox in modal (timeout or error). "
                 f"Treating as a textbox. Error: {e}"
             )
             
@@ -630,7 +1100,7 @@ class ModalFlowRunner:
         self.logger.debug(f"No match found for '{search_text}', using first option: '{options[0]}'")
         return options[0]
 
-    async def _handle_number_inputs(self, modal: Locator):
+    async def _handle_number_inputs(self, modal: Locator, is_same_dialog: bool = False):
         """Handle number input fields (input[type='number'])."""
         # Find all number inputs using CSS selector since they don't have textbox role
         number_inputs = modal.locator('input[type="number"]')
@@ -641,6 +1111,18 @@ class ModalFlowRunner:
         for i in range(count):
             num_input = number_inputs.nth(i)
             question = await self._label_for(num_input)
+            
+            if is_same_dialog:
+                try:
+                    current_value = await num_input.input_value()
+                    if current_value and current_value.strip():
+                        self.logger.info(
+                            f"[NUMBER] Skipping already filled number input '{question}' "
+                            f"with value '{current_value}' due to unchanged dialog."
+                        )
+                        continue
+                except Exception as e:
+                    self.logger.debug(f"[NUMBER] Could not determine number input value: {e}")
             
             # Get additional attributes for debugging
             placeholder = await num_input.get_attribute("placeholder") or ""
@@ -672,7 +1154,7 @@ class ModalFlowRunner:
             
             await num_input.fill(value)
     
-    async def _handle_textboxes(self, modal: Locator):
+    async def _handle_textboxes(self, modal: Locator, is_same_dialog: bool = False):
         """Handle text input fields."""
         # Find all textboxes, but exclude elements that also have the "combobox" role,
         # as they are handled separately and might not be fillable.
@@ -684,6 +1166,27 @@ class ModalFlowRunner:
         for i in range(count):
             tb = tbs.nth(i)
             question = await self._label_for(tb)
+            
+            if is_same_dialog:
+                try:
+                    current_value = await tb.input_value()
+                    if current_value and current_value.strip():
+                        self.logger.info(
+                            f"[TEXTBOX] Skipping already filled textbox '{question}' "
+                            f"with value '{current_value[:50]}' due to unchanged dialog."
+                        )
+                        continue
+                except Exception:
+                    try:
+                        current_value = await tb.inner_text()
+                        if current_value and current_value.strip():
+                            self.logger.info(
+                                f"[TEXTBOX] Skipping already filled textbox '{question}' "
+                                f"(textarea content) due to unchanged dialog."
+                            )
+                            continue
+                    except Exception as e:
+                        self.logger.debug(f"[TEXTBOX] Could not determine textbox value: {e}")
             
             # Get additional attributes for debugging
             placeholder = await tb.get_attribute("placeholder") or ""
@@ -753,9 +1256,160 @@ class ModalFlowRunner:
         aria = await any_radio.get_attribute("aria-label")
         return aria or "radio group"
     
+    async def _get_radio_option_text(self, radio: Locator) -> str:
+        """
+        Extract option text for a radio button (not the question text).
+        
+        For radio buttons, we need the text of the specific option (e.g., "Yes", "No"),
+        not the question text from the fieldset legend.
+        
+        Args:
+            radio: Radio button locator
+            
+        Returns:
+            Option text (e.g., "Yes", "No")
+        """
+        # Try to find the label element that contains the option text
+        # LinkedIn radio buttons are usually structured as:
+        # <label><input type="radio"> Option Text </label>
+        # or
+        # <li><input type="radio"><span>Option Text</span></li>
+        
+        try:
+            # Method 1: Get text from parent container, excluding the input and filtering question text
+            option_text = await radio.evaluate(
+                """(el) => {
+                    // Find parent container (label, li, or div with radio class)
+                    let container = el.closest('label, li, div[class*="radio"], div[class*="option"]');
+                    if (!container) container = el.parentElement;
+                    if (!container) return '';
+                    
+                    // Clone to avoid modifying original
+                    const clone = container.cloneNode(true);
+                    
+                    // Remove all radio inputs from clone
+                    const inputs = clone.querySelectorAll('input[type="radio"]');
+                    inputs.forEach(input => input.remove());
+                    
+                    // Get text and split by newlines
+                    const text = clone.innerText.trim();
+                    const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
+                    
+                    // Find lines that look like options (short, not questions)
+                    const questionWords = ['are you', 'do you', 'have you', 'can you', 'will you', 'required'];
+                    const optionLines = lines.filter(line => {
+                        const lower = line.toLowerCase();
+                        // Skip lines that contain question words or are too long
+                        const hasQuestionWord = questionWords.some(word => lower.includes(word));
+                        const isTooLong = line.length > 80;
+                        const hasRequired = lower.includes('required') && lines.length > 1;
+                        return !hasQuestionWord && !isTooLong && !(hasRequired && line.length < 10);
+                    });
+                    
+                    if (optionLines.length > 0) {
+                        // Return the shortest line (most likely the option text like "Yes", "No")
+                        const shortest = optionLines.reduce((a, b) => a.length < b.length ? a : b);
+                        // Remove "Required" suffix if present
+                        return shortest.replace(/\\s+Required\\s*$/i, '').trim();
+                    }
+                    
+                    // Fallback: if we have lines, try the last short line
+                    if (lines.length > 0) {
+                        for (let i = lines.length - 1; i >= 0; i--) {
+                            const line = lines[i];
+                            if (line.length > 0 && line.length < 50 && 
+                                !line.toLowerCase().includes('required') &&
+                                !questionWords.some(word => line.toLowerCase().includes(word))) {
+                                return line;
+                            }
+                        }
+                    }
+                    
+                    // Last resort: return first non-empty line if text is not too long
+                    if (text.length < 50) {
+                        return text;
+                    }
+                    
+                    return '';
+                }"""
+            )
+            
+            if option_text and option_text.strip():
+                cleaned = option_text.strip()
+                # Remove common suffixes
+                cleaned = re.sub(r'\s+Required\s*$', '', cleaned, flags=re.IGNORECASE)
+                if cleaned:
+                    return cleaned
+        except Exception as e:
+            self.logger.debug(f"Error extracting radio option text (method 1): {e}")
+        
+        # Method 2: Try to find sibling span or label with option text
+        try:
+            sibling_text = await radio.evaluate(
+                """(el) => {
+                    // Look for next sibling span, label, or div
+                    let sibling = el.nextElementSibling;
+                    let attempts = 0;
+                    while (sibling && attempts < 5) {
+                        const tagName = sibling.tagName;
+                        if (tagName === 'SPAN' || tagName === 'LABEL' || tagName === 'DIV') {
+                            const text = sibling.innerText.trim();
+                            // Skip if it looks like a question
+                            if (text && text.length < 50 && 
+                                !text.toLowerCase().includes('are you') &&
+                                !text.toLowerCase().includes('do you') &&
+                                !text.toLowerCase().includes('required')) {
+                                return text;
+                            }
+                        }
+                        sibling = sibling.nextElementSibling;
+                        attempts++;
+                    }
+                    return '';
+                }"""
+            )
+            if sibling_text and sibling_text.strip():
+                cleaned = sibling_text.strip()
+                cleaned = re.sub(r'\s+Required\s*$', '', cleaned, flags=re.IGNORECASE)
+                if cleaned:
+                    return cleaned
+        except Exception as e:
+            self.logger.debug(f"Error extracting radio option text (method 2): {e}")
+        
+        # Method 3: Try aria-label (should be option-specific if present)
+        try:
+            aria = await radio.get_attribute("aria-label")
+            if aria and aria.strip():
+                aria_clean = aria.strip()
+                # If aria-label is short and doesn't look like a question, use it
+                if len(aria_clean) < 50 and not any(word in aria_clean.lower() for word in ['are you', 'do you', 'have you']):
+                    return aria_clean
+        except Exception:
+            pass
+        
+        # Method 4: Try value attribute (sometimes contains the option text)
+        try:
+            value = await radio.get_attribute("value")
+            if value and value.strip():
+                return value.strip()
+        except Exception:
+            pass
+        
+        # Fallback: return empty string (caller should handle this)
+        return ""
+    
     async def _label_for(self, element: Locator) -> str:
         """
         Extract label text for an element.
+        
+        Uses multiple strategies to find label text:
+        1. Standard ARIA attributes (aria-label, aria-labelledby)
+        2. Label[for] association
+        3. Fieldset legend
+        4. LinkedIn-specific data-test attributes
+        5. Parent container text
+        6. Previous sibling text
+        7. Common LinkedIn form field patterns
         
         Args:
             element: Element locator
@@ -765,7 +1419,7 @@ class ModalFlowRunner:
         """
         # Try aria-label
         aria = await element.get_attribute("aria-label")
-        if aria:
+        if aria and aria.strip():
             return aria.strip()
         
         # Try aria-labelledby
@@ -782,7 +1436,7 @@ class ModalFlowRunner:
                         .join(' ').trim();
                 }"""
             )
-            if text:
+            if text and text.strip():
                 return text.strip()
         
         # Try label[for] association
@@ -797,7 +1451,7 @@ class ModalFlowRunner:
         if lab_text and lab_text.strip():
             return lab_text.strip()
 
-        # Fallback to parent fieldset legend
+        # Try parent fieldset legend
         legend_text = await element.evaluate(
             """(el) => {
                 const fieldset = el.closest('fieldset');
@@ -808,7 +1462,288 @@ class ModalFlowRunner:
         )
         if legend_text and legend_text.strip():
             return legend_text.strip()
+        
+        # Try LinkedIn-specific data-test attributes
+        # Look for span with data-test attributes that contain label text
+        try:
+            data_test_label = element.locator(
+                "xpath=ancestor::*[contains(@class, 'form') or contains(@class, 'field') or contains(@class, 'input')][1]//span[contains(@data-test, 'title') or contains(@data-test, 'label')]"
+            )
+            if await data_test_label.count() > 0:
+                label_text = await data_test_label.first.inner_text()
+                if label_text and label_text.strip():
+                    return label_text.strip()
+        except Exception:
+            pass
+        
+        # Try to find label text in parent container
+        # Look for text in parent div/span that appears before the input
+        try:
+            parent_label_text = await element.evaluate(
+                """(el) => {
+                    // Find parent container (form field wrapper)
+                    let parent = el.closest('div[class*="form"], div[class*="field"], div[class*="input"], li, fieldset');
+                    if (!parent) parent = el.parentElement;
+                    if (!parent) return '';
+                    
+                    // Get all potential label elements in the parent
+                    const labelSelectors = ['label', 'span', 'div', 'p'];
+                    const candidates = [];
+                    
+                    for (const selector of labelSelectors) {
+                        const elements = parent.querySelectorAll(selector);
+                        for (const candidate of elements) {
+                            // Skip the input element itself and its children
+                            if (candidate === el || candidate.contains(el)) {
+                                continue;
+                            }
+                            
+                            const text = candidate.innerText.trim();
+                            if (text && text.length > 0 && text.length < 100) {
+                                // Skip error messages and validation text
+                                const lowerText = text.toLowerCase();
+                                if (lowerText.includes('error') || 
+                                    lowerText.includes('invalid') || 
+                                    lowerText.includes('required') ||
+                                    lowerText.includes('please enter')) {
+                                    continue;
+                                }
+                                
+                                // Skip if it contains the input value or placeholder
+                                const inputValue = (el.value || el.placeholder || '').toLowerCase();
+                                if (inputValue && inputValue.length > 0 && lowerText.includes(inputValue)) {
+                                    continue;
+                                }
+                                
+                                // Check if this element is before the input in DOM order
+                                try {
+                                    const position = candidate.compareDocumentPosition(el);
+                                    if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
+                                        candidates.push({
+                                            text: text,
+                                            element: candidate,
+                                            isBefore: true
+                                        });
+                                    }
+                                } catch (e) {
+                                    // If compareDocumentPosition fails, still add as candidate
+                                    candidates.push({
+                                        text: text,
+                                        element: candidate,
+                                        isBefore: false
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Sort candidates: prefer elements that are before the input
+                    candidates.sort((a, b) => {
+                        if (a.isBefore && !b.isBefore) return -1;
+                        if (!a.isBefore && b.isBefore) return 1;
+                        // Prefer shorter text (more likely to be a label)
+                        return a.text.length - b.text.length;
+                    });
+                    
+                    // Return the first candidate
+                    if (candidates.length > 0) {
+                        return candidates[0].text;
+                    }
+                    
+                    return '';
+                }"""
+            )
+            if parent_label_text and parent_label_text.strip():
+                return parent_label_text.strip()
+        except Exception:
+            pass
+        
+        # Try to find text in previous sibling elements
+        try:
+            sibling_label_text = await element.evaluate(
+                """(el) => {
+                    // Look for previous sibling that might contain label text
+                    let sibling = el.previousElementSibling;
+                    while (sibling) {
+                        const text = sibling.innerText.trim();
+                        // Skip if text is too long or empty
+                        if (text && text.length > 0 && text.length < 100) {
+                            // Check if it looks like a label (not an error message)
+                            if (!text.toLowerCase().includes('error') && 
+                                !text.toLowerCase().includes('invalid') &&
+                                !text.toLowerCase().includes('required')) {
+                                return text;
+                            }
+                        }
+                        sibling = sibling.previousElementSibling;
+                    }
+                    return '';
+                }"""
+            )
+            if sibling_label_text and sibling_label_text.strip():
+                return sibling_label_text.strip()
+        except Exception:
+            pass
+        
+        # Try to find label by walking up DOM tree (up to 5 levels)
+        # Extract and combine text from adjacent elements before the input
+        try:
+            dom_walk_label = await element.evaluate(
+                """(el) => {
+                    // Walk up the DOM tree up to 5 levels from the input element
+                    let inputContainer = el;
+                    const allGroups = [];
+                    
+                    // Walk up to 5 levels
+                    for (let level = 1; level <= 5; level++) {
+                        if (!inputContainer || !inputContainer.parentElement) break;
+                        
+                        // Move to parent
+                        const parent = inputContainer.parentElement;
+                        
+                        // Get all children of parent
+                        const children = Array.from(parent.children);
+                        
+                        // Find which child contains (or is) the input container
+                        let inputChildIndex = -1;
+                        for (let i = 0; i < children.length; i++) {
+                            if (children[i].contains(el) || children[i] === inputContainer) {
+                                inputChildIndex = i;
+                                break;
+                            }
+                        }
+                        
+                        // If we found the input container's position, collect all elements before it
+                        if (inputChildIndex > 0) {
+                            const elementsBeforeInput = [];
+                            
+                            for (let i = 0; i < inputChildIndex; i++) {
+                                const candidate = children[i];
+                                
+                                // Skip if candidate contains the input
+                                if (candidate.contains(el)) {
+                                    continue;
+                                }
+                                
+                                // Extract text from candidate element
+                                try {
+                                    let text = candidate.textContent || candidate.innerText || '';
+                                    text = text.trim();
+                                    
+                                    if (text && text.length > 0) {
+                                        // Skip if it's exactly the input value
+                                        const inputValue = (el.value || el.placeholder || '').trim();
+                                        if (inputValue && text === inputValue) {
+                                            continue;
+                                        }
+                                        
+                                        // Store element with its text and position
+                                        elementsBeforeInput.push({
+                                            text: text,
+                                            index: i
+                                        });
+                                    }
+                                } catch (e) {
+                                    continue;
+                                }
+                            }
+                            
+                            // If we found elements before input at this level, group adjacent elements
+                            if (elementsBeforeInput.length > 0) {
+                                // Group consecutive elements (adjacent elements)
+                                const groups = [];
+                                let currentGroup = [];
+                                
+                                for (let i = 0; i < elementsBeforeInput.length; i++) {
+                                    const elem = elementsBeforeInput[i];
+                                    
+                                    if (currentGroup.length === 0) {
+                                        // Start new group
+                                        currentGroup.push(elem);
+                                    } else {
+                                        // Check if this element is adjacent to the last element in current group
+                                        const lastIndex = currentGroup[currentGroup.length - 1].index;
+                                        if (elem.index === lastIndex + 1) {
+                                            // Adjacent element - add to current group
+                                            currentGroup.push(elem);
+                                        } else {
+                                            // Not adjacent - save current group and start new one
+                                            if (currentGroup.length > 0) {
+                                                groups.push([...currentGroup]);
+                                            }
+                                            currentGroup = [elem];
+                                        }
+                                    }
+                                }
+                                
+                                // Don't forget the last group
+                                if (currentGroup.length > 0) {
+                                    groups.push(currentGroup);
+                                }
+                                
+                                // Process each group: combine texts and calculate distance from input
+                                for (const group of groups) {
+                                    // Combine texts from all elements in the group
+                                    const combinedTexts = group.map(e => e.text).filter(t => t && t.length > 0);
+                                    if (combinedTexts.length > 0) {
+                                        // Join texts with dot and space between them
+                                        const combinedText = combinedTexts.join('. ').trim();
+                                        
+                                        if (combinedText.length > 0) {
+                                            // Calculate distance from input
+                                            // Distance = inputChildIndex - lastElementIndex (how many elements between group and input)
+                                            const lastElementIndex = group[group.length - 1].index;
+                                            const distance = inputChildIndex - lastElementIndex;
+                                            
+                                            // Store group with distance
+                                            allGroups.push({
+                                                text: combinedText,
+                                                distance: distance,
+                                                level: level
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Update inputContainer for next iteration
+                        inputContainer = parent;
+                    }
+                    
+                    // Sort groups by distance only (closer to input = smaller distance = higher priority)
+                    allGroups.sort((a, b) => {
+                        return a.distance - b.distance;
+                    });
+                    
+                    // Return the text from the closest group (first after sorting)
+                    if (allGroups.length > 0) {
+                        return allGroups[0].text;
+                    }
+                    
+                    return '';
+                }"""
+            )
+            if dom_walk_label and dom_walk_label.strip():
+                return dom_walk_label.strip()
+        except Exception:
+            pass
             
+        # Last resort: return "field" but log a warning
+        try:
+            element_id = await element.get_attribute('id')
+            element_name = await element.get_attribute('name')
+            element_type = await element.get_attribute('type')
+            element_placeholder = await element.get_attribute('placeholder')
+            self.logger.warning(
+                f"Could not extract label for element. Using fallback 'field'. "
+                f"Element attributes: id={element_id}, "
+                f"name={element_name}, "
+                f"type={element_type}, "
+                f"placeholder={element_placeholder}"
+            )
+        except Exception:
+            self.logger.warning("Could not extract label for element. Using fallback 'field'.")
         return "field"
     
     async def _wait_for_spinners_to_disappear(self, timeout: int = 5000):
