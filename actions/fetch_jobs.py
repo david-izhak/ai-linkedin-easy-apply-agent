@@ -1,4 +1,9 @@
-from playwright.async_api import Page
+import asyncio
+from playwright.async_api import (
+    Error as PlaywrightError,
+    Page,
+    TimeoutError as PlaywrightTimeoutError,
+)
 import re
 import logging
 from urllib.parse import urlencode
@@ -14,7 +19,52 @@ import sqlite3
 from config import AppConfig
 
 logger = logging.getLogger(__name__)
-MAX_PAGE_SIZE = 25
+
+DEFAULT_TEXT_RETRY_DELAYS = (3, 6, 9)
+DEFAULT_TEXT_RETRY_LABEL = "/".join(str(delay) for delay in DEFAULT_TEXT_RETRY_DELAYS)
+
+
+async def _extract_text_with_retry(locator, label: str, delays=DEFAULT_TEXT_RETRY_DELAYS):
+    """Scrolls to the locator and attempts to retrieve non-empty text with retries."""
+    delay_sequence_label = "/".join(str(delay) for delay in delays)
+    for delay in delays:
+        try:
+            await locator.scroll_into_view_if_needed()
+        except PlaywrightError as scroll_error:
+            logger.debug(
+                "%s locator not ready for scrolling (delay %s): %s",
+                label,
+                delay,
+                scroll_error,
+            )
+            await asyncio.sleep(0.5)
+            continue
+
+        await asyncio.sleep(delay)
+
+        try:
+            text = (await locator.inner_text()).strip()
+        except PlaywrightError as read_error:
+            logger.debug(
+                "Failed to read %s text (delay %s): %s",
+                label,
+                delay,
+                read_error,
+            )
+            continue
+
+        if text:
+            return text
+
+        logger.debug(
+            "%s still empty after waiting %s seconds.",
+            label,
+            delay,
+        )
+
+    raise TimeoutError(
+        f"{label} text did not load after waiting {delay_sequence_label} seconds."
+    )
 
 
 async def _ensure_all_jobs_are_loaded(page: Page) -> None:
@@ -319,13 +369,47 @@ async def _scrape_job_page_details(page: Page, link: str) -> dict:
     """Scrapes details from the main job listing page."""
     logger.debug(f"Scraping job details for {link}...")
     details = {}
+    description_element_selector = selectors["job_description"]
+    logger.debug(f"For description_element from job page using selector: {description_element_selector}")
+    description_locator = page.locator(description_element_selector).first
+    description_locator_ready = True
     try:
-        description_element = await page.query_selector(selectors["job_description"])
-        if description_element:
-            details["description"] = await description_element.inner_text()
-    except Exception as e:
+        await description_locator.wait_for(
+            state="attached",
+            timeout=config.performance.max_wait_ms,
+        )
+        await description_locator.wait_for(
+            state="visible",
+            timeout=config.performance.max_wait_ms,
+        )
+    except PlaywrightTimeoutError:
         logger.warning(
-            f"Could not fetch job description for {link}. Exception: {e}", exc_info=True
+            "Job description locator `%s` did not become ready within %s ms.",
+            description_element_selector,
+            config.performance.max_wait_ms,
+        )
+        description_locator_ready = False
+
+    if description_locator_ready:
+        try:
+            description_text = await _extract_text_with_retry(
+                description_locator,
+                "Job description",
+            )
+            details["description"] = description_text
+            logger.debug(f"Found job description: {description_text[:100]}...")
+        except TimeoutError:
+            logger.error("Timed out waiting for non-empty job description text.")
+            raise
+        except Exception as e:
+            logger.warning(
+                f"Could not fetch job description for {link}. Exception: {e}",
+                exc_info=True,
+            )
+    else:
+        logger.warning(
+            "Job description selector did not find any element. Selector: %s",
+            description_element_selector,
         )
 
     try:
@@ -337,7 +421,7 @@ async def _scrape_job_page_details(page: Page, link: str) -> dict:
             details["company_description"] = description_text
             logger.debug(f"Found company description: {description_text[:100]}...")
         else:
-            logger.debug("Company description selector did not find any element.")
+            logger.warning(f"Company description selector did not find any element. Selector: {description_element_selector}")
     except Exception as e:
         logger.warning(
             f"Could not fetch company description on job page for {link}. Exception: {e}",
@@ -352,8 +436,10 @@ async def _scrape_job_page_details(page: Page, link: str) -> dict:
             employment_types = [
                 await el.inner_text() for el in employment_type_elements
             ]
-            details["employment_type"] = ", ".join(employment_types)
+            details["employment_type"] = ", ".join(employment_types[:2])
             logger.debug(f"Found employment type: {details['employment_type']}")
+        else:
+            logger.warning(f"Employment type selector did not find any elements. Selector: {selectors['employment_type_details']}")
     except Exception as e:
         logger.warning(
             f"Could not fetch employment type for {link}. Exception: {e}",
@@ -369,37 +455,140 @@ async def _scrape_company_about_page(page: Page, about_url: str) -> dict:
     logger.info(f"Navigating to company 'About' page: {about_url}")
     await page.goto(about_url, wait_until="load")
 
+    overview_selector = selectors["company_about_overview"]
+    overview_locator = page.locator(overview_selector).first
+    overview_ready = True
     try:
-        overview_el = await page.query_selector(selectors["company_about_overview"])
-        if overview_el:
-            details["company_overview"] = await overview_el.inner_text()
-    except Exception as e:
+        await overview_locator.wait_for(
+            state="attached",
+            timeout=config.performance.max_wait_ms,
+        )
+        await overview_locator.wait_for(
+            state="visible",
+            timeout=config.performance.max_wait_ms,
+        )
+    except PlaywrightTimeoutError:
         logger.warning(
-            f"Could not fetch company overview. Exception: {e}",
-            exc_info=True,
+            "Company overview locator `%s` did not become ready within %s ms.",
+            overview_selector,
+            config.performance.max_wait_ms,
+        )
+        overview_ready = False
+
+    if overview_ready:
+        try:
+            overview_text = await _extract_text_with_retry(
+                overview_locator,
+                "Company overview",
+            )
+            details["company_overview"] = overview_text
+            logger.debug(f"Found company overview: {overview_text[:100]}...")
+        except TimeoutError:
+            logger.warning(
+                "Timed out waiting for company overview text after %s seconds.",
+                DEFAULT_TEXT_RETRY_LABEL,
+            )
+        except Exception as e:
+            logger.warning(
+                f"Could not fetch company overview. Exception: {e}",
+                exc_info=True,
+            )
+    else:
+        logger.warning(
+            "Company overview selector did not find any element. Selector: %s",
+            overview_selector,
         )
 
+    details_list_selector = selectors["company_about_details_list"]
+    details_list_locator = page.locator(details_list_selector).first
+    details_list_ready = True
     try:
-        details_list = await page.query_selector(
-            selectors["company_about_details_list"]
+        await details_list_locator.wait_for(
+            state="attached",
+            timeout=config.performance.max_wait_ms,
         )
-        if details_list:
-            dt_elements = await details_list.query_selector_all("dt")
-            dd_elements = await details_list.query_selector_all("dd")
-            for i in range(len(dt_elements)):
-                term = (await dt_elements[i].inner_text()).strip().lower()
-                definition = (await dd_elements[i].inner_text()).strip()
-                if term == "website":
-                    details["company_website"] = definition
-                elif term == "industry":
-                    details["company_industry"] = definition
-                elif term == "company size":
-                    details["company_size"] = definition
-    except Exception as e:
+    except PlaywrightTimeoutError:
         logger.warning(
-            f"Could not fetch company details list. Exception: {e}",
-            exc_info=True,
+            "Company details list locator `%s` did not attach within %s ms.",
+            details_list_selector,
+            config.performance.max_wait_ms,
         )
+        details_list_ready = False
+
+    if details_list_ready:
+        try:
+            try:
+                await details_list_locator.scroll_into_view_if_needed()
+            except PlaywrightError as scroll_error:
+                logger.debug(
+                    "Company details list not ready for scrolling: %s",
+                    scroll_error,
+                )
+
+            detail_pairs = []
+            for delay in DEFAULT_TEXT_RETRY_DELAYS:
+                await asyncio.sleep(delay)
+                try:
+                    evaluation_result = await details_list_locator.evaluate(
+                        """(node) => {
+                            const dts = Array.from(node.querySelectorAll('dt'));
+                            const dds = Array.from(node.querySelectorAll('dd'));
+                            const pairs = [];
+                            const limit = Math.min(dts.length, dds.length);
+                            for (let i = 0; i < limit; i += 1) {
+                                const term = dts[i].innerText.trim().toLowerCase();
+                                const definition = dds[i].innerText.trim();
+                                if (term && definition) {
+                                    pairs.push([term, definition]);
+                                }
+                            }
+                            return pairs;
+                        }"""
+                    )
+                except PlaywrightError as eval_error:
+                    logger.debug(
+                        "Failed to evaluate company details list (delay %s): %s",
+                        delay,
+                        eval_error,
+                    )
+                    continue
+
+                detail_pairs = evaluation_result or []
+                if detail_pairs:
+                    break
+
+                logger.debug(
+                    "Company details list still empty after waiting %s seconds.",
+                    delay,
+                )
+
+            if detail_pairs:
+                for term, definition in detail_pairs:
+                    if term == "website":
+                        details["company_website"] = definition
+                        logger.debug(f"Found company website: {definition}")
+                    elif term == "industry":
+                        details["company_industry"] = definition
+                        logger.debug(f"Found company industry: {definition}")
+                    elif term == "company size":
+                        details["company_size"] = definition
+                        logger.debug(f"Found company size: {definition}")
+            else:
+                logger.warning(
+                    "Company details list did not load after waiting %s seconds.",
+                    DEFAULT_TEXT_RETRY_LABEL,
+                )
+        except Exception as e:
+            logger.warning(
+                f"Could not fetch company details list. Exception: {e}",
+                exc_info=True,
+            )
+    else:
+        logger.warning(
+            "Company details list selector did not find any element. Selector: %s",
+            details_list_selector,
+        )
+
     return details
 
 
@@ -447,7 +636,7 @@ async def fetch_job_details(page: Page, link: str, noncritical_error_tracker: di
                 logger.debug("Recovered: company_link_query reset to 0")
             company_href = await company_profile_link_element.get_attribute("href")
             if company_href:
-                about_url = construct_full_url(company_href).replace("/life", "/about/")
+                about_url = construct_full_url(company_href).replace("/life", "/about")
                 try:
                     company_about_details = await _scrape_company_about_page(
                         page, about_url

@@ -250,3 +250,6 @@ async def click_easy_apply_button(page: Page) -> None:
 
 
 
+
+
+

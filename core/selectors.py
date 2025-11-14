@@ -1,20 +1,14 @@
 selectors = {
-    # "easy_apply_button_enabled": "button.jobs-apply-button:enabled", # outdated
+    # Easy apply button
     "easy_apply_button": 'a[data-view-name="job-apply-button"]:has-text("Easy Apply")',  # Основной селектор
     "easy_apply_button_fallback_1": 'a[data-view-name="job-apply-button"]',  # Фолбек 1: без текста
     "easy_apply_button_fallback_2": 'a[href*="/apply"]:has-text("Easy Apply")',  # Фолбек 2: по href
     "easy_apply_button_fallback_3": "div.jobs-apply-button--top-card button",  # Фолбек 3: старый селектор
-    # "easy_apply_button": 'button:has-text("Easy Apply"):not([aria-label*="{:companyName}"])',
-
-    # Job search form
-    # "keyword_input": 'input[id*="jobs-search-box-keyword-id"]', # outdated
-    # "location_input": 'input[id*="jobs-search-box-location-id"]', # outdated
 
     # Easy apply form
     "checkbox": ".jobs-easy-apply-modal input[type='checkbox']",
     "fieldset": ".jobs-easy-apply-modal fieldset",
     "select": ".jobs-easy-apply-modal select",
-    # "next_button": ".jobs-easy-apply-modal footer button[aria-label*='next'], footer button[aria-label*='Review']", # outdated
     "submit": ".jobs-easy-apply-modal footer button[aria-label*='Submit']",
     "enabled_submit_or_next_button": ".jobs-easy-apply-modal footer button[aria-label*='Submit']:enabled, .jobs-easy-apply-modal  footer button[aria-label*='next']:enabled, .jobs-easy-apply-modal  footer button[aria-label*='Review']:enabled",
     "text_input": ".jobs-easy-apply-modal input[type='text'], .jobs-easy-apply-modal textarea",
@@ -36,31 +30,19 @@ selectors = {
     "skip_button": "button[text()='Skip']",
 
     # fetch jobs list page
-    # "search_result_list": ".jobs-search-results-list", # outdated
-    # "search_result_list_text": "small.jobs-search-results-list__text", # outdated
-    # "search_result_list_subtitle": ".jobs-search-results-list__subtitle span[dir='ltr']",  # outdated. С помощью этого селектора можно найти общее количество найденных по запросу вакансии.
-    # "search_result_list_item": ".jobs-search-results-list li.jobs-search-results__list-item", # It doesn't work. There is no such selector on the page with a jobs list.
     "job_card_container": "div.job-card-container[data-job-id]",
     "job_card_container_in_list": ".scaffold-layout__list-item",
-    # "search_result_list_item_link": "a.job-card-container__link, a.job-card-list__title--link, a.job-card-list__title",  # outdated
-    # "search_result_list_item_company_name": "div.artdeco-entity-lockup__subtitle span, div.job-card-container__company-name, a.job-card-container__company-name",  # outdated
-    # "applied_to_job_feedback": ".artdeco-inline-feedback",  # outdated
 
     # Job details page
-    "job_description": "div#job-details",
-    "company_profile_link": "div.job-details-jobs-unified-top-card__company-name a",
-    "company_description": ".jobs-company__company-description",
-    "employment_type_details": "div.job-details-fit-level-preferences button",
+    "job_description": 'div:has(> h2:has-text("About the job")) + p >> span[data-testid="expandable-text-box"]',
+    "company_profile_link": 'a[href^="https://www.linkedin.com/company/"]',
+    "company_description": 'div:has(> h2:has-text("About the company")) + div span[data-testid="expandable-text-box"]',
+    "employment_type_details": 'div[data-view-name="job-detail-page"] button:has(svg#check-small)',
 
     # Company About page
     "company_about_overview": "section.org-about-module__margin-bottom p",
     "company_about_details_list": "dl.overflow-hidden",
 
     # fetch guest (if needed in future)
-    # "job_count": ".results-context-header__job-count", # outdated
     "show_more_button": ".infinite-scroller__show-more-button:enabled",
-    # "search_result_list_item_guest": ".jobs-search__results-list li", # It doesn't work. There is no such selector on the page with a jobs list.
-    # "search_result_list_item_title_guest": ".base-search-card__title", # outdated
-    # "search_result_list_item_subtitle_guest": ".base-search-card__subtitle", # outdated
-    # "search_result_list_item_location_guest": ".job-search-card__location", # outdated
 }
