@@ -2,6 +2,7 @@ from playwright.async_api import Page
 import logging
 from core.selectors import selectors
 from core.utils import ask_user, wait_for_any_selector
+from core.resilience import get_resilience_executor
 from config import config  # Import the new config object
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,8 @@ async def login(page: Page) -> None:
         playwright._impl._errors.TimeoutError: If critical selectors do not appear in time.
     """
     logger.info("Checking for active LinkedIn session...")
-    await page.goto("https://www.linkedin.com/feed/", wait_until="load")
+    executor = get_resilience_executor(page)
+    await executor.navigate("https://www.linkedin.com/feed/", wait_until="load")
 
     # Wait for either login indicator (authenticated) or login form (not authenticated)
     # This is much faster than wait_for_load_state("networkidle")
@@ -30,7 +32,7 @@ async def login(page: Page) -> None:
     current_url = page.url
     # If we are on the authenticated feed, consider login successful immediately
     if "linkedin.com/feed" in current_url:
-        nav = await page.query_selector(selectors["login_indicator"])  # best-effort check
+        nav = await executor.query_selector_with_retry(selectors["login_indicator"])  # best-effort check
         if nav is not None:
             logger.info("Active session detected via /feed URL. Skipping login.")
             return
@@ -41,17 +43,17 @@ async def login(page: Page) -> None:
     logger.info("Did not detect active session; proceeding to explicit login flow.")
 
     logger.debug("Navigating to login page.")
-    await page.goto("https://www.linkedin.com/login", wait_until="load")
+    await executor.navigate("https://www.linkedin.com/login", wait_until="load")
 
     logger.debug("Entering login credentials.")
     # Ensure inputs are present and visible before interacting
-    await page.wait_for_selector(selectors["email_input"], state="visible")
-    await page.wait_for_selector(selectors["password_input"], state="visible")
-    await page.fill(selectors["email_input"], config.login.email)
-    await page.fill(selectors["password_input"], config.login.password)
+    await executor.wait_for_selector("email_input", selectors["email_input"], timeout=config.performance.selector_timeout)
+    await executor.wait_for_selector("password_input", selectors["password_input"], timeout=config.performance.selector_timeout)
+    await executor.fill("email_input", config.login.email, css_selector=selectors["email_input"])
+    await executor.fill("password_input", config.login.password, css_selector=selectors["password_input"])
 
     logger.debug("Clicking login submit button.")
-    await page.click(selectors["login_submit"])
+    await executor.click("login_submit", css_selector=selectors["login_submit"])
 
     # Wait for either successful login (nav indicator/feed) or captcha
     # This replaces wait_for_load_state("load") with specific element waiting
@@ -64,16 +66,16 @@ async def login(page: Page) -> None:
     if not login_success:
         logger.debug("Neither login indicator nor captcha appeared after login submit; continuing.")
 
-    captcha_element = await page.query_selector(selectors["captcha"])
+    captcha_element = await executor.query_selector_with_retry(selectors["captcha"])
     if captcha_element:
         logger.warning("Captcha detected. Pausing for user intervention.")
         ask_user("Please solve the captcha and then press enter in the terminal.")
-        await page.goto("https://www.linkedin.com/feed/", wait_until="load")
+        await executor.navigate("https://www.linkedin.com/feed/", wait_until="load")
 
     logger.info("Successfully logged in to LinkedIn.")
 
     try:
         logger.debug("Checking for and clicking 'skip' button for post-login prompts.")
-        await page.click(selectors["skip_button"], timeout=config.performance.selector_timeout)
+        await executor.click("skip_button", css_selector=selectors["skip_button"], timeout=config.performance.selector_timeout)
     except Exception as e:
         logger.debug(f"'Skip' button not found, continuing. Exception: {e}")

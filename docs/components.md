@@ -50,6 +50,12 @@
     - **Circuit Breakers** (`pybreaker`): Предотвращение каскадных сбоев путём временного отключения неработающих зависимостей.
     - Настраиваемые стратегии повторов (экспоненциальная задержка, jitter).
     - Graceful degradation: Переход на резервные механизмы при сбоях.
+    - **ResilienceExecutor**: Универсальный executor для всех типов операций:
+        - Селекторные операции (делегирует к SelectorExecutor)
+        - Навигация (`navigate()`)
+        - Извлечение текста (`extract_text_with_retry()`)
+        - Workflow-операции с cleanup (`execute_workflow_with_retry()`)
+        - DOM-запросы (`query_selector_with_retry()`)
 
 ### `utils.py`
 

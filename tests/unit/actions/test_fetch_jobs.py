@@ -8,6 +8,7 @@ import sqlite3
 from config import AppConfig, config, WorkplaceConfig # Import config and AppConfig
 from core import database
 from core.selectors import selectors
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from actions.fetch_jobs import (
     _get_total_job_count,
     _extract_job_data_from_page,
@@ -19,15 +20,18 @@ from actions.fetch_jobs import (
 
 from pytest_mock import MockerFixture
 
-# Mock SelectorExecutor for testing
+# Mock ResilienceExecutor for testing
 mock_executor_instance = AsyncMock()
 
 @pytest.fixture(autouse=True)
-def mock_get_selector_executor():
-    with patch('actions.fetch_jobs.resilience.get_selector_executor', return_value=mock_executor_instance) as mock:
+def mock_get_resilience_executor():
+    with patch('actions.fetch_jobs.get_resilience_executor', return_value=mock_executor_instance) as mock:
         # Reset mock's behavior and call history before each test
         mock_executor_instance.reset_mock()
         mock_executor_instance.get_text.side_effect = None
+        mock_executor_instance.navigate = AsyncMock()
+        mock_executor_instance.extract_text_with_retry = AsyncMock()
+        mock_executor_instance.query_selector_with_retry = AsyncMock()
         yield mock
 
 @pytest.fixture
@@ -210,7 +214,7 @@ class TestFetchJobLinksUser:
             [
                 (4, "link4", "DevOps Engineer", "Company D"),
             ],
-        ]
+]
     
         keywords = "software engineer"
         workplace = config.workplace
@@ -256,7 +260,8 @@ class TestFetchJobLinksUser:
 
         mock_get_total_job_count.assert_called_once()
         assert result == []
-        mock_page.goto.assert_called_once()
+        # Now uses executor.navigate instead of page.goto
+        mock_executor_instance.navigate.assert_called_once()
 
 
 class TestScrapeJobPageDetails:
@@ -266,35 +271,46 @@ class TestScrapeJobPageDetails:
         """Test successful scraping of job page details."""
         mock_page = AsyncMock()
 
-        # Mock description and company description elements
-        mock_desc_element = AsyncMock()
-        mock_desc_element.inner_text.return_value = "Job description here"
-        
-        mock_comp_desc_element = AsyncMock()
-        mock_comp_desc_element.inner_text.return_value = "Company description here"
+        # Mock locators for description and company description
+        mock_desc_locator = AsyncMock()
+        mock_desc_locator.wait_for = AsyncMock()
+        mock_company_desc_locator = AsyncMock()
+        mock_company_desc_locator.wait_for = AsyncMock()
 
-        mock_page.query_selector.side_effect = [
-            mock_desc_element,
-            mock_comp_desc_element,
-        ]
+        def locator_side_effect(selector):
+            mock_locator_obj = MagicMock()
+            if selector == selectors["job_description"]:
+                mock_locator_obj.first = mock_desc_locator
+            elif selector == selectors["company_description"]:
+                mock_locator_obj.first = mock_company_desc_locator
+            else:
+                mock_locator_obj.first = AsyncMock()
+            return mock_locator_obj
+
+        mock_page.locator = MagicMock(side_effect=locator_side_effect)
+
+        # Mock extract_text_with_retry to return description texts
+        mock_executor_instance.extract_text_with_retry = AsyncMock(
+            side_effect=["Job description here", "Company description here"]
+        )
 
         # Mock employment type elements
-        mock_employment_type1 = AsyncMock()
-        mock_employment_type1.inner_text.return_value = "Full-time"
-        
         mock_employment_type2 = AsyncMock()
         mock_employment_type2.inner_text.return_value = "Hybrid"
         
+        mock_employment_type1 = AsyncMock()
+        mock_employment_type1.inner_text.return_value = "Full-time"
+        
         mock_page.query_selector_all.return_value = [
-            mock_employment_type1,
             mock_employment_type2,
+            mock_employment_type1,
         ]
 
         result = await _scrape_job_page_details(mock_page, "/job/123")
 
         assert result["description"] == "Job description here"
         assert result["company_description"] == "Company description here"
-        assert result["employment_type"] == "Full-time, Hybrid"
+        assert result["employment_type"] == "Hybrid, Full-time"
 
 
 class TestScrapeCompanyAboutPage:
@@ -305,35 +321,34 @@ class TestScrapeCompanyAboutPage:
         mock_page = AsyncMock()
         company_name = "test-company"
 
-        # Mock overview element
-        mock_overview_el = AsyncMock()
-        mock_page.query_selector.return_value = mock_overview_el
-        mock_overview_el.inner_text.return_value = "Company overview here"
-
-        # For the second call (details list)
-        mock_details_list = AsyncMock()
-        mock_page.query_selector.side_effect = [mock_overview_el, mock_details_list]
-
-        # Mock dt and dd elements
-        mock_dt1 = AsyncMock()
-        mock_dt2 = AsyncMock()
-        mock_dt3 = AsyncMock()
-        mock_dd1 = AsyncMock()
-        mock_dd2 = AsyncMock()
-        mock_dd3 = AsyncMock()
-
-        mock_details_list.query_selector_all.side_effect = [
-            [mock_dt1, mock_dt2, mock_dt3],  # dt elements
-            [mock_dd1, mock_dd2, mock_dd3],  # dd elements
-        ]
-
-        mock_dt1.inner_text.return_value = "Website"
-        mock_dt2.inner_text.return_value = "Industry"
-        mock_dt3.inner_text.return_value = "Company size"
-
-        mock_dd1.inner_text.return_value = "https://company.com"
-        mock_dd2.inner_text.return_value = "Technology"
-        mock_dd3.inner_text.return_value = "1001-5000 employees"
+        # Mock locator for overview
+        mock_overview_locator = AsyncMock()
+        mock_overview_locator.wait_for = AsyncMock()
+        
+        # Mock details list locator
+        mock_details_list_locator = AsyncMock()
+        mock_details_list_locator.wait_for = AsyncMock()
+        mock_details_list_locator.scroll_into_view_if_needed = AsyncMock()
+        # evaluate returns list of [term, definition] pairs
+        mock_details_list_locator.evaluate = AsyncMock(return_value=[
+            ["website", "https://company.com"],
+            ["industry", "Technology"],
+            ["company size", "1001-5000 employees"],
+        ])
+        
+        # Setup locator side effect for overview and details list
+        def locator_side_effect(selector):
+            mock_locator_obj = MagicMock()
+            if "overview" in selector or "about" in selector:
+                mock_locator_obj.first = mock_overview_locator
+            else:
+                mock_locator_obj.first = mock_details_list_locator
+            return mock_locator_obj
+        
+        mock_page.locator = MagicMock(side_effect=locator_side_effect)
+        
+        # Mock extract_text_with_retry to return overview text
+        mock_executor_instance.extract_text_with_retry.return_value = "Company overview here"
 
         result = await _scrape_company_about_page(mock_page, company_name)
 
@@ -377,18 +392,21 @@ class TestFetchJobDetails:
             "company_size": "1001-5000 employees",
         }
 
-        # Mock company profile link element
-        mock_company_profile_link = AsyncMock()
-        mock_company_profile_link.get_attribute.return_value = "/company/test-company/life"
-        mock_page.query_selector.return_value = mock_company_profile_link
+        # Mock company profile link locator
+        mock_link_locator = MagicMock()
+        mock_link_locator.wait_for = AsyncMock()
+        mock_link_locator.get_attribute = AsyncMock(return_value="/company/test-company/life")
+        mock_locator_wrapper = MagicMock()
+        mock_locator_wrapper.first = mock_link_locator
+        mock_page.locator = MagicMock(return_value=mock_locator_wrapper)
 
         result = await fetch_job_details(mock_page, job_link)
 
-        mock_page.goto.assert_called_once_with(f"https://www.linkedin.com{job_link}", wait_until="load")
-        mock_scrape_job_page_details.assert_called_once_with(mock_page, f"https://www.linkedin.com{job_link}")
-        mock_page.query_selector.assert_called_once_with(
-            selectors["company_profile_link"]
+        # Now uses executor.navigate instead of page.goto
+        mock_executor_instance.navigate.assert_called_once_with(
+            f"https://www.linkedin.com{job_link}", wait_until="load"
         )
+        mock_scrape_job_page_details.assert_called_once_with(mock_page, f"https://www.linkedin.com{job_link}")
         mock_scrape_company_about_page.assert_called_once_with(
             mock_page, "https://www.linkedin.com/company/test-company/about/"
         )
@@ -426,15 +444,20 @@ class TestFetchJobDetails:
             "company_description": "Company description",
         }
 
-        mock_page.query_selector.return_value = None  # No company link found
+        mock_link_locator = MagicMock()
+        mock_link_locator.wait_for = AsyncMock(side_effect=PlaywrightTimeoutError("not found"))
+        mock_link_locator.get_attribute = AsyncMock(return_value=None)
+        mock_locator_wrapper = MagicMock()
+        mock_locator_wrapper.first = mock_link_locator
+        mock_page.locator = MagicMock(return_value=mock_locator_wrapper)
 
         result = await fetch_job_details(mock_page, job_link)
 
-        mock_page.goto.assert_called_once_with(f"https://www.linkedin.com{job_link}", wait_until="load")
-        mock_scrape_job_page_details.assert_called_once_with(mock_page, f"https://www.linkedin.com{job_link}")
-        mock_page.query_selector.assert_called_once_with(
-            selectors["company_profile_link"]
+        # Now uses executor.navigate instead of page.goto
+        mock_executor_instance.navigate.assert_called_once_with(
+            f"https://www.linkedin.com{job_link}", wait_until="load"
         )
+        mock_scrape_job_page_details.assert_called_once_with(mock_page, f"https://www.linkedin.com{job_link}")
         mock_scrape_company_about_page.assert_not_called()
 
         # Should only have job page details
@@ -466,15 +489,15 @@ class TestFetchJobDetails:
             "company_description": "Company description",
         }
 
-        mock_page.query_selector.side_effect = Exception("Link not found")
+        mock_page.locator = MagicMock(side_effect=Exception("Link not found"))
 
         result = await fetch_job_details(mock_page, job_link)
 
-        mock_page.goto.assert_called_once_with(f"https://www.linkedin.com{job_link}", wait_until="load")
-        mock_scrape_job_page_details.assert_called_once_with(mock_page, f"https://www.linkedin.com{job_link}")
-        mock_page.query_selector.assert_called_once_with(
-            selectors["company_profile_link"]
+        # Now uses executor.navigate instead of page.goto
+        mock_executor_instance.navigate.assert_called_once_with(
+            f"https://www.linkedin.com{job_link}", wait_until="load"
         )
+        mock_scrape_job_page_details.assert_called_once_with(mock_page, f"https://www.linkedin.com{job_link}")
         mock_scrape_company_about_page.assert_not_called()
 
         # Should only have job page details

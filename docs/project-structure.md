@@ -200,8 +200,14 @@
 **Классы:**
 - `CircuitBreakerListener`: Мониторинг состояния
 - `SelectorCircuitBreaker`: Менеджер circuit breaker
-- `SelectorExecutor`: Комбинация retry + circuit breaker
-- 10 convenience методов (click, fill, check, etc.)
+- `SelectorExecutor`: Комбинация retry + circuit breaker для селекторных операций
+- `ResilienceExecutor`: Универсальный executor для всех типов операций:
+    - Делегирует селекторные операции к SelectorExecutor
+    - `navigate()`: Навигация с ретраями
+    - `extract_text_with_retry()`: Извлечение текста с ретраями и скроллингом
+    - `execute_workflow_with_retry()`: Workflow-операции с cleanup между попытками
+    - `query_selector_with_retry()`: DOM-запросы с ретраями
+- 10 convenience методов (click, fill, check, etc.) через делегирование
 
 ---
 

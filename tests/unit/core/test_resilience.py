@@ -13,8 +13,10 @@ from core.resilience import (
     SelectorCircuitBreaker, 
     CircuitBreakerListener, 
     SelectorExecutor,
+    ResilienceExecutor,
     get_circuit_breaker_manager,
-    get_selector_executor
+    get_selector_executor,
+    get_resilience_executor
 )
 from config import AppConfig
 
@@ -301,4 +303,163 @@ async def test_get_selector_executor(mock_page, monkeypatch):
                 # But different pages get different executors
                 mock_page2 = AsyncMock()
                 executor3 = get_selector_executor(mock_page2)
+                assert executor1 is not executor3
+
+
+class TestResilienceExecutor:
+    """Tests for the ResilienceExecutor class."""
+    
+    @pytest.mark.asyncio
+    async def test_resilience_executor_initialization(self, mock_page, monkeypatch):
+        """Test ResilienceExecutor initialization."""
+        with patch("core.resilience.get_structured_logger"):
+            with patch("core.resilience.get_metrics_collector"):
+                with patch("core.resilience.get_circuit_breaker_manager"):
+                    monkeypatch.setattr("core.resilience.config", MagicMock(spec=AppConfig))
+                    executor = ResilienceExecutor(mock_page, MagicMock(spec=AppConfig))
+                    assert executor.page == mock_page
+                    assert executor.selector_executor is not None
+    
+    @pytest.mark.asyncio
+    async def test_resilience_executor_delegates_to_selector_executor(self, mock_page, monkeypatch):
+        """Test that ResilienceExecutor delegates methods to SelectorExecutor."""
+        with patch("core.resilience.get_structured_logger"):
+            with patch("core.resilience.get_metrics_collector"):
+                with patch("core.resilience.get_circuit_breaker_manager"):
+                    monkeypatch.setattr("core.resilience.config", MagicMock(spec=AppConfig))
+                    executor = ResilienceExecutor(mock_page, MagicMock(spec=AppConfig))
+                    
+                    # Mock selector_executor methods
+                    executor.selector_executor.click = AsyncMock()
+                    executor.selector_executor.fill = AsyncMock()
+                    executor.selector_executor.wait_for_selector = AsyncMock()
+                    
+                    await executor.click("test_selector")
+                    executor.selector_executor.click.assert_called_once()
+                    
+                    await executor.fill("test_selector", "value")
+                    executor.selector_executor.fill.assert_called_once()
+                    
+                    await executor.wait_for_selector("test_selector", "css")
+                    executor.selector_executor.wait_for_selector.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_navigate(self, mock_page, monkeypatch):
+        """Test navigate method with retries."""
+        with patch("core.resilience.get_structured_logger"):
+            with patch("core.resilience.get_metrics_collector"):
+                with patch("core.resilience.get_circuit_breaker_manager"):
+                    monkeypatch.setattr("core.resilience.config", MagicMock(spec=AppConfig))
+                    mock_config = MagicMock(spec=AppConfig)
+                    # Create nested mocks for config attributes
+                    mock_config.performance = MagicMock()
+                    mock_config.performance.selector_timeout = 5000
+                    mock_config.resilience = MagicMock()
+                    mock_config.resilience.navigation_max_attempts = 3
+                    mock_config.selector_retry_overrides = MagicMock()
+                    mock_config.selector_retry_overrides.overrides = {}
+                    
+                    executor = ResilienceExecutor(mock_page, mock_config)
+                    executor.selector_executor.execute_operation = AsyncMock()
+                    
+                    await executor.navigate("https://example.com")
+                    executor.selector_executor.execute_operation.assert_called_once()
+                    call_args = executor.selector_executor.execute_operation.call_args
+                    assert call_args[1]["selector_name"] == "navigation"
+    
+    @pytest.mark.asyncio
+    async def test_extract_text_with_retry(self, mock_page, monkeypatch):
+        """Test extract_text_with_retry method."""
+        with patch("core.resilience.get_structured_logger"):
+            with patch("core.resilience.get_metrics_collector"):
+                with patch("core.resilience.get_circuit_breaker_manager"):
+                    monkeypatch.setattr("core.resilience.config", MagicMock(spec=AppConfig))
+                    mock_config = MagicMock(spec=AppConfig)
+                    # Create nested mocks for config attributes
+                    mock_config.resilience = MagicMock()
+                    mock_config.resilience.text_extraction_delays = (0.1, 0.2)
+                    
+                    executor = ResilienceExecutor(mock_page, mock_config)
+                    
+                    # Mock locator
+                    mock_locator = AsyncMock()
+                    mock_locator.scroll_into_view_if_needed = AsyncMock()
+                    mock_locator.inner_text = AsyncMock(return_value="Test text")
+                    
+                    result = await executor.extract_text_with_retry(mock_locator, "Test label")
+                    assert result == "Test text"
+                    mock_locator.scroll_into_view_if_needed.assert_called()
+                    mock_locator.inner_text.assert_called()
+    
+    @pytest.mark.asyncio
+    async def test_execute_workflow_with_retry(self, mock_page, monkeypatch):
+        """Test execute_workflow_with_retry method."""
+        with patch("core.resilience.get_structured_logger"):
+            with patch("core.resilience.get_metrics_collector"):
+                with patch("core.resilience.get_circuit_breaker_manager"):
+                    monkeypatch.setattr("core.resilience.config", MagicMock(spec=AppConfig))
+                    mock_config = MagicMock(spec=AppConfig)
+                    # Create nested mocks for config attributes
+                    mock_config.resilience = MagicMock()
+                    mock_config.resilience.workflow_max_attempts = 3
+                    mock_config.resilience.workflow_initial_wait = 0.1
+                    mock_config.resilience.exponential_base = 2
+                    mock_config.selector_retry_overrides = MagicMock()
+                    mock_config.selector_retry_overrides.overrides = {}
+                    
+                    executor = ResilienceExecutor(mock_page, mock_config)
+                    
+                    # Mock operation that succeeds on first attempt
+                    mock_operation = AsyncMock(return_value=True)
+                    mock_cleanup = AsyncMock()
+                    
+                    result = await executor.execute_workflow_with_retry(
+                        "test_workflow",
+                        mock_operation,
+                        cleanup_between_attempts=mock_cleanup
+                    )
+                    
+                    assert result is True
+                    mock_operation.assert_called_once()
+                    # Cleanup should not be called if operation succeeds
+                    mock_cleanup.assert_not_called()
+    
+    @pytest.mark.asyncio
+    async def test_query_selector_with_retry(self, mock_page, monkeypatch):
+        """Test query_selector_with_retry method."""
+        with patch("core.resilience.get_structured_logger"):
+            with patch("core.resilience.get_metrics_collector"):
+                with patch("core.resilience.get_circuit_breaker_manager"):
+                    monkeypatch.setattr("core.resilience.config", MagicMock(spec=AppConfig))
+                    mock_config = MagicMock(spec=AppConfig)
+                    # Create nested mocks for config attributes
+                    mock_config.performance = MagicMock()
+                    mock_config.performance.selector_timeout = 5000
+                    
+                    executor = ResilienceExecutor(mock_page, mock_config)
+                    executor.selector_executor.execute_operation = AsyncMock(return_value=MagicMock())
+                    
+                    result = await executor.query_selector_with_retry("div.test")
+                    assert result is not None
+                    executor.selector_executor.execute_operation.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_resilience_executor(mock_page, monkeypatch):
+    """Test the singleton resilience executor."""
+    monkeypatch.setattr("core.resilience._resilience_executor", {})
+    
+    with patch("core.resilience.get_structured_logger"):
+        with patch("core.resilience.get_metrics_collector"):
+            with patch("core.resilience.get_circuit_breaker_manager"):
+                monkeypatch.setattr("core.resilience.config", MagicMock(spec=AppConfig))
+                executor1 = get_resilience_executor(mock_page)
+                executor2 = get_resilience_executor(mock_page)
+                
+                # Verify they are the same object
+                assert executor1 is executor2
+                
+                # But different pages get different executors
+                mock_page2 = AsyncMock()
+                executor3 = get_resilience_executor(mock_page2)
                 assert executor1 is not executor3

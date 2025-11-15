@@ -1,7 +1,7 @@
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator, model_validator
@@ -45,6 +45,11 @@ class ResilienceConfig(BaseSettings):
     max_wait: float = 10.0  # seconds
     exponential_base: int = 2
     jitter: bool = True
+    # New fields for unified retry mechanism
+    text_extraction_delays: Tuple[float, ...] = (3.0, 6.0, 9.0)  # seconds
+    navigation_max_attempts: int = 3
+    workflow_initial_wait: float = 20.0  # seconds
+    workflow_max_attempts: int = 4
 
 
 class CircuitBreakerConfig(BaseSettings):
@@ -73,7 +78,7 @@ class JobSearchConfig(BaseSettings):
     keywords: str = "Software Engineer"
     geo_id: str = "118490091"
     distance: str = "20"
-    job_search_period_seconds: int = 2592000  # 30 days in seconds / 7 days = 604800 / 2 days = 172800 / 1 day = 86400
+    job_search_period_seconds: int = 8640 # 30 days = 86400 / 7 days = 604800/ 4 days = 345600 / 2 days = 172800 / 1 day = 86400 / 3 days = 259200
     sort_by: str = "DD"  # DD = Date Descending, R = Relevance
     job_title_regex: str = r"(?i)^(?!.*(frontend|rust|laravel|php|junior|angular|driver|go(lang)|architect|qa|unity|technical|lead|teamlead|devops|salesforce|technology|llm|embedded|hardware|android|firmware|c\+\+|\.net|c#)).*?(automation|staff|sw|solution(s)|software|java|python|data|back\s*end|ai|chatbot|principal|full\s*stack|senior).*?.*?(developer|engineer).*$"
     job_description_regex: str = r".*"
@@ -134,7 +139,7 @@ class GeneralSettingsConfig(BaseSettings):
 class BotModeConfig(BaseSettings):
     """Configuration for the bot's operating mode."""
 
-    mode: str = Field("processing", validation_alias="BOT_MODE")
+    mode: str = Field("enrichment", validation_alias="BOT_MODE")
     valid_modes: List[str] = [
         "discovery",
         "enrichment",
@@ -158,8 +163,8 @@ class JobLimitsConfig(BaseSettings):
     """Settings for limiting job processing (for testing/minimal runs)."""
 
     max_jobs_to_discover: Optional[int] = 0
-    max_jobs_to_enrich: Optional[int] = 0
-    max_jobs_to_process: Optional[int] = 4
+    max_jobs_to_enrich: Optional[int] = 1
+    max_jobs_to_process: Optional[int] = 0
 
 
 class PerformanceConfig(BaseSettings):

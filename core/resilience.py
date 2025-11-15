@@ -10,7 +10,8 @@ This module provides mechanisms for building resilient operations using:
 import time
 import functools
 import logging
-from typing import Dict, Any, Optional, Callable, TypeVar, Union, cast, Awaitable
+import asyncio
+from typing import Dict, Any, Optional, Callable, TypeVar, Union, cast, Awaitable, Tuple
 
 import structlog
 import pybreaker
@@ -24,7 +25,7 @@ from tenacity import (
     RetryError,
     wait_random
 )
-from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError, Locator, Error as PlaywrightError
 
 from core.metrics import get_metrics_collector
 from core.logger import get_structured_logger, bind_context
@@ -729,4 +730,425 @@ def get_selector_executor(page: Page) -> SelectorExecutor:
     if page_id not in _selector_executor:
         _selector_executor[page_id] = SelectorExecutor(page, config)
     return _selector_executor[page_id]
+
+
+class ResilienceExecutor:
+    """
+    Universal executor for all types of operations with retry and circuit breaker protection.
+    
+    This class provides a unified interface for:
+    - Selector operations (delegates to SelectorExecutor)
+    - Navigation operations
+    - Text extraction operations
+    - Workflow operations (with cleanup between attempts)
+    - DOM query operations
+    
+    All operations benefit from centralized configuration, metrics, and logging.
+    """
+    
+    def __init__(self, page: Page, app_config: AppConfig):
+        """
+        Initialize the resilience executor.
+        
+        Args:
+            page: Playwright page instance
+            app_config: The application configuration object
+        """
+        self.page = page
+        self.app_config = app_config
+        self.selector_executor = SelectorExecutor(page, app_config)
+        self.logger = get_structured_logger(__name__)
+    
+    # Delegate all SelectorExecutor methods for backward compatibility
+    async def wait_for_selector(
+        self, 
+        selector_name: str, 
+        css_selector: str,
+        context: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> Any:
+        """Wait for a selector to be visible with resilience."""
+        return await self.selector_executor.wait_for_selector(
+            selector_name, css_selector, context, timeout
+        )
+    
+    async def click(
+        self, 
+        selector_name: str, 
+        css_selector: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> None:
+        """Click on an element with resilience."""
+        return await self.selector_executor.click(
+            selector_name, css_selector, context, timeout
+        )
+    
+    async def fill(
+        self, 
+        selector_name: str, 
+        value: str,
+        css_selector: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> None:
+        """Fill a form field with resilience."""
+        return await self.selector_executor.fill(
+            selector_name, value, css_selector, context, timeout
+        )
+    
+    async def check(
+        self, 
+        selector_name: str, 
+        checked: bool = True,
+        css_selector: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> None:
+        """Check or uncheck a checkbox with resilience."""
+        return await self.selector_executor.check(
+            selector_name, checked, css_selector, context, timeout
+        )
+    
+    async def select_option(
+        self, 
+        selector_name: str, 
+        value: str,
+        css_selector: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> None:
+        """Select an option from a dropdown with resilience."""
+        return await self.selector_executor.select_option(
+            selector_name, value, css_selector, context, timeout
+        )
+    
+    async def upload_file(
+        self, 
+        selector_name: str, 
+        file_path: str,
+        css_selector: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> None:
+        """Upload a file with resilience."""
+        return await self.selector_executor.upload_file(
+            selector_name, file_path, css_selector, context, timeout
+        )
+    
+    async def get_text(
+        self, 
+        selector_name: str, 
+        css_selector: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> str:
+        """Get the text content of an element with resilience."""
+        return await self.selector_executor.get_text(
+            selector_name, css_selector, context, timeout
+        )
+    
+    async def is_visible(
+        self, 
+        selector_name: str, 
+        css_selector: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> bool:
+        """Check if an element is visible with resilience."""
+        return await self.selector_executor.is_visible(
+            selector_name, css_selector, context, timeout
+        )
+    
+    async def execute_operation(
+        self,
+        selector_name: str,
+        operation: Callable[..., Awaitable[T]],
+        context: Optional[Dict[str, Any]] = None,
+        *args,
+        **kwargs
+    ) -> T:
+        """Execute a custom operation with resilience."""
+        return await self.selector_executor.execute_operation(
+            selector_name, operation, context, *args, **kwargs
+        )
+    
+    # New methods for unified retry mechanism
+    
+    async def navigate(
+        self,
+        url: str,
+        context: Optional[Dict[str, Any]] = None,
+        wait_until: str = "load",
+        timeout: Optional[int] = None
+    ) -> None:
+        """
+        Navigate to a URL with retry and circuit breaker protection.
+        
+        Args:
+            url: URL to navigate to
+            context: Additional context for logging
+            wait_until: Navigation wait condition (load, domcontentloaded, networkidle)
+            timeout: Timeout in milliseconds. Defaults to config.performance.selector_timeout.
+        """
+        if timeout is None:
+            timeout = self.app_config.performance.selector_timeout
+        
+        # Get navigation-specific configuration
+        selector_config_override = self.app_config.selector_retry_overrides.overrides.get("navigation", {})
+        max_attempts = selector_config_override.get(
+            "max_attempts", 
+            self.app_config.resilience.navigation_max_attempts
+        )
+        
+        async def nav_operation():
+            await self.page.goto(url, wait_until=wait_until, timeout=timeout)
+        
+        return await self.selector_executor.execute_operation(
+            selector_name="navigation",
+            operation=nav_operation,
+            context={**(context or {}), "url": url, "wait_until": wait_until}
+        )
+    
+    async def extract_text_with_retry(
+        self,
+        locator: Locator,
+        label: str,
+        context: Optional[Dict[str, Any]] = None,
+        custom_delays: Optional[Tuple[float, ...]] = None
+    ) -> str:
+        """
+        Extract text from a locator with retries and scrolling.
+        
+        This method replaces the custom _extract_text_with_retry function.
+        It scrolls to the locator, waits with delays, and extracts text until non-empty.
+        
+        Args:
+            locator: Playwright Locator instance
+            label: Label for logging (e.g., "Job description")
+            context: Additional context for logging
+            custom_delays: Custom delay sequence. Defaults to config.resilience.text_extraction_delays.
+            
+        Returns:
+            Extracted text (non-empty)
+            
+        Raises:
+            TimeoutError: If text is still empty after all retries
+        """
+        delays = custom_delays or self.app_config.resilience.text_extraction_delays
+        delay_sequence_label = "/".join(str(delay) for delay in delays)
+        
+        op_logger = bind_context(
+            self.logger,
+            operation="extract_text_with_retry",
+            label=label,
+            **(context or {})
+        )
+        
+        for attempt, delay in enumerate(delays, start=1):
+            try:
+                # Try to scroll to the locator
+                try:
+                    await locator.scroll_into_view_if_needed()
+                except PlaywrightError as scroll_error:
+                    op_logger.debug(
+                        f"{label} locator not ready for scrolling (delay {delay}): {scroll_error}"
+                    )
+                    await asyncio.sleep(0.5)
+                    continue
+                
+                # Wait for the specified delay
+                await asyncio.sleep(delay)
+                
+                # Try to extract text
+                try:
+                    text = (await locator.inner_text()).strip()
+                except PlaywrightError as read_error:
+                    op_logger.debug(
+                        f"Failed to read {label} text (delay {delay}): {read_error}"
+                    )
+                    continue
+                
+                # If we got non-empty text, return it
+                if text:
+                    op_logger.debug(f"Successfully extracted {label} text after {delay}s delay")
+                    return text
+                
+                op_logger.debug(
+                    f"{label} still empty after waiting {delay} seconds."
+                )
+                
+            except Exception as e:
+                op_logger.debug(f"Error during text extraction attempt {attempt}: {e}")
+                continue
+        
+        # All attempts failed
+        raise TimeoutError(
+            f"{label} text did not load after waiting {delay_sequence_label} seconds."
+        )
+    
+    async def execute_workflow_with_retry(
+        self,
+        operation_name: str,
+        operation: Callable[..., Awaitable[T]],
+        cleanup_between_attempts: Optional[Callable[[], Awaitable[None]]] = None,
+        context: Optional[Dict[str, Any]] = None,
+        *args,
+        **kwargs
+    ) -> T:
+        """
+        Execute a workflow operation with retry, exponential backoff, and optional cleanup.
+        
+        This method is designed for operations at the phase level (enrichment, processing)
+        that may need cleanup between retry attempts (e.g., closing pages).
+        
+        Args:
+            operation_name: Name of the operation (for logs, metrics, circuit breaker)
+            operation: Async function to execute
+            cleanup_between_attempts: Optional cleanup function to call between attempts
+            context: Additional context for logging
+            *args: Positional arguments to pass to the operation
+            **kwargs: Keyword arguments to pass to the operation
+            
+        Returns:
+            Result of the operation
+            
+        Raises:
+            Exception: If the operation fails after all retries
+        """
+        # Get workflow-specific configuration
+        selector_config_override = self.app_config.selector_retry_overrides.overrides.get("workflow", {})
+        max_attempts = selector_config_override.get(
+            "max_attempts",
+            self.app_config.resilience.workflow_max_attempts
+        )
+        initial_wait = selector_config_override.get(
+            "initial_wait",
+            self.app_config.resilience.workflow_initial_wait
+        )
+        exponential_base = selector_config_override.get(
+            "exponential_base",
+            self.app_config.resilience.exponential_base
+        )
+        
+        op_logger = bind_context(
+            self.logger,
+            operation=operation_name,
+            **(context or {})
+        )
+        
+        last_exception: Optional[Exception] = None
+        
+        for attempt in range(1, max_attempts + 1):
+            try:
+                op_logger.debug(
+                    f"Executing {operation_name} (attempt {attempt}/{max_attempts})"
+                )
+                
+                result = await operation(*args, **kwargs)
+                
+                op_logger.info(
+                    f"Successfully executed {operation_name} on attempt {attempt}"
+                )
+                return result
+                
+            except (PlaywrightError, Exception) as e:  # noqa: BLE001
+                last_exception = e
+                
+                if attempt < max_attempts:
+                    # Calculate wait time with exponential backoff
+                    wait_seconds = initial_wait * (exponential_base ** (attempt - 1))
+                    
+                    op_logger.warning(
+                        f"Attempt {attempt}/{max_attempts} failed for {operation_name}. "
+                        f"Error: {e}. Retrying in {wait_seconds:.1f} seconds..."
+                    )
+                    
+                    # Perform cleanup if provided
+                    if cleanup_between_attempts:
+                        try:
+                            await cleanup_between_attempts()
+                            op_logger.debug(f"Cleanup completed before retry {attempt + 1}")
+                        except Exception as cleanup_error:
+                            op_logger.warning(
+                                f"Cleanup failed before retry: {cleanup_error}"
+                            )
+                    
+                    await asyncio.sleep(wait_seconds)
+                else:
+                    # All attempts exhausted
+                    op_logger.error(
+                        f"All {max_attempts} attempts exhausted for {operation_name}. "
+                        f"Last error: {e}"
+                    )
+                    raise
+        
+        # This should never be reached, but type checker needs it
+        if last_exception:
+            raise last_exception
+        raise RuntimeError(f"Failed to execute {operation_name} after {max_attempts} attempts")
+    
+    async def query_selector_with_retry(
+        self,
+        selector: str,
+        context: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> Optional[Any]:
+        """
+        Query a selector with retry and circuit breaker protection.
+        
+        Args:
+            selector: CSS selector string
+            context: Additional context for logging
+            timeout: Timeout in milliseconds. Defaults to config.performance.selector_timeout.
+            
+        Returns:
+            ElementHandle if found, None otherwise
+        """
+        if timeout is None:
+            timeout = self.app_config.performance.selector_timeout
+        
+        async def query_operation():
+            # Try to find the element directly
+            element = await self.page.query_selector(selector)
+            if element:
+                return element
+            # If not found, try using locator which supports complex selectors better
+            try:
+                locator = self.page.locator(selector).first
+                await locator.wait_for(state="attached", timeout=min(timeout, 2000))
+                return await self.page.query_selector(selector)
+            except Exception:
+                # Return None if selector not found (non-critical operation)
+                return None
+        
+        try:
+            return await self.selector_executor.execute_operation(
+                selector_name="query_selector",
+                operation=query_operation,
+                context={**(context or {}), "selector": selector}
+            )
+        except Exception:
+            # Return None if selector not found (non-critical operation)
+            return None
+
+
+# Singleton instance for app-wide resilience executor
+_resilience_executor: Dict[int, ResilienceExecutor] = {}
+
+
+def get_resilience_executor(page: Page) -> ResilienceExecutor:
+    """
+    Get or create a resilience executor for a page.
+    
+    Args:
+        page: Playwright page instance
+        
+    Returns:
+        ResilienceExecutor instance for the page
+    """
+    page_id = id(page)
+    if page_id not in _resilience_executor:
+        _resilience_executor[page_id] = ResilienceExecutor(page, config)
+    return _resilience_executor[page_id]
 

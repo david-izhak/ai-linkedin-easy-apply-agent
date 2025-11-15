@@ -21,13 +21,16 @@ from tenacity import (
     after_log,
 )
 import types
-from core.resilience import get_selector_executor  # for test patch compatibility
+from core.resilience import get_resilience_executor, get_selector_executor  # for test patch compatibility
 
 logger = logging.getLogger(__name__)
 structured_logger = get_structured_logger(__name__)
 
 # Backward-compatibility shim for tests expecting actions.apply.resilience.get_selector_executor
-resilience = types.SimpleNamespace(get_selector_executor=get_selector_executor)
+resilience = types.SimpleNamespace(
+    get_selector_executor=get_selector_executor,
+    get_resilience_executor=get_resilience_executor
+)
 
 
 async def click_easy_apply_button(page: Page) -> None:
@@ -48,7 +51,7 @@ async def click_easy_apply_button(page: Page) -> None:
     timeout = config.performance.selector_timeout
     
     # Get executor for resilience patterns
-    executor = resilience.get_selector_executor(page)
+    executor = resilience.get_resilience_executor(page)
     
     # Build locator chain using .or() for automatic fallback
     # Start with the primary CSS selector (most reliable based on testing)
@@ -110,7 +113,7 @@ async def click_easy_apply_button(page: Page) -> None:
                 "selecting_last_easy_apply_button",
                 total_elements=count
             )
-            element_locator = locator.last()
+            element_locator = locator.last
         
         # Wait for the selected element to be visible and clickable
         logger.debug("Waiting for selected button to be visible and clickable...")

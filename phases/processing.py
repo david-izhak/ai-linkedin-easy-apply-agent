@@ -108,17 +108,77 @@ async def _process_single_job(
     try:
         page = await context.new_page()
         await page.goto(full_url, wait_until="load")
-
+        
+        # Wait a bit for page to fully render, especially for dynamic content
+        # This ensures "No longer accepting applications" text is loaded if present
+        await asyncio.sleep(2)
+        
         # Skip postings that are no longer open for applications.
-        closed_locator = page.locator("text=/No longer accepting applications/i")
-        if await closed_locator.count() > 0:
-            logger.info(
-                "Vacancy '%s' is no longer accepting applications. Skipping.", title
-            )
-            update_job_status(
-                job_id, "applications_closed", app_config.session.db_conn
-            )
-            return False
+        # Try multiple methods to find the text, as it might be in different states
+        try:
+            closed_locator = page.get_by_text("No longer accepting applications", exact=False)
+            count = await closed_locator.count()
+            
+            if count > 0:
+                # Check if at least one instance is visible
+                try:
+                    first_closed = closed_locator.first
+                    is_visible = await first_closed.is_visible()
+                    if is_visible:
+                        logger.info(
+                            "Vacancy '%s' is no longer accepting applications. Skipping.", title
+                        )
+                        update_job_status(
+                            job_id, "applications_closed", app_config.session.db_conn
+                        )
+                        return False
+                except Exception as e:
+                    # If visibility check fails, still check count as fallback
+                    logger.debug(f"Visibility check failed for closed text: {e}, using count={count}")
+                    if count > 0:
+                        logger.info(
+                            "Vacancy '%s' is no longer accepting applications (detected by count). Skipping.", title
+                        )
+                        update_job_status(
+                            job_id, "applications_closed", app_config.session.db_conn
+                        )
+                        return False
+        except Exception as e:
+            logger.debug(f"Error checking for 'No longer accepting applications' text: {e}")
+            # Continue processing if check fails - better to try than to skip
+        
+        # Additional check: if Easy Apply button is disabled, the vacancy might be closed
+        # This is a heuristic check before we try to click the button
+        try:
+            easy_apply_button = page.locator("button[data-view-name='job-apply-button']").first
+            button_count = await easy_apply_button.count()
+            if button_count > 0:
+                is_disabled = await easy_apply_button.is_disabled()
+                button_text = await easy_apply_button.text_content()
+                logger.debug(f"Easy Apply button found: disabled={is_disabled}, text='{button_text}'")
+                
+                # If button is disabled, check if it's because applications are closed
+                if is_disabled:
+                    # Try to find the "No longer accepting applications" message again
+                    # Sometimes it appears after button is rendered
+                    await asyncio.sleep(1)
+                    closed_check = page.get_by_text("No longer accepting applications", exact=False)
+                    closed_count = await closed_check.count()
+                    if closed_count > 0:
+                        try:
+                            if await closed_check.first.is_visible():
+                                logger.info(
+                                    "Vacancy '%s' is no longer accepting applications (button disabled). Skipping.", title
+                                )
+                                update_job_status(
+                                    job_id, "applications_closed", app_config.session.db_conn
+                                )
+                                return False
+                        except Exception:
+                            pass
+        except Exception as e:
+            logger.debug(f"Error checking Easy Apply button state: {e}")
+            # Continue processing if check fails
 
         job_context = JobApplicationContext(
             job_id=job_id,

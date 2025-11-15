@@ -21,7 +21,7 @@ class TestClickNextButton:
         
         # Patch the imports
         with patch("apply_form.click_next_button.get_structured_logger", return_value=mock_logger):
-            with patch("apply_form.click_next_button.get_selector_executor", return_value=mock_executor):
+            with patch("apply_form.click_next_button.get_resilience_executor", return_value=mock_executor):
                 # Call the function
                 await click_next_button(
                     page=mock_page, 
@@ -48,7 +48,7 @@ class TestClickNextButton:
         
         # Patch the imports
         with patch("apply_form.click_next_button.get_structured_logger", return_value=mock_logger):
-            with patch("apply_form.click_next_button.get_selector_executor", return_value=mock_executor):
+            with patch("apply_form.click_next_button.get_resilience_executor", return_value=mock_executor):
                 # Call the function without job_id and job_title
                 await click_next_button(page=mock_page)
                 

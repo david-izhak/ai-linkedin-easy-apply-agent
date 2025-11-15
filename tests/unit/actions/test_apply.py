@@ -1,7 +1,7 @@
 import os
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
 from playwright.async_api import TimeoutError
@@ -14,17 +14,18 @@ from core.selectors import selectors
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 
-# Shared mock for selector executor used by click_easy_apply_button
+# Shared mock for resilience executor used by click_easy_apply_button
 mock_executor_instance = AsyncMock()
 
 
 @pytest.fixture(autouse=True)
-def mock_get_selector_executor():
+def mock_get_resilience_executor():
     with patch(
-        "actions.apply.resilience.get_selector_executor",
+        "actions.apply.resilience.get_resilience_executor",
         return_value=mock_executor_instance,
     ):
         mock_executor_instance.reset_mock()
+        mock_executor_instance.execute_operation = AsyncMock()
         yield
 
 
@@ -32,25 +33,61 @@ class TestClickEasyApplyButton:
     @pytest.mark.asyncio
     async def test_click_easy_apply_button_success(self):
         page = AsyncMock()
-
+        
+        # Mock locator chain methods
+        mock_locator = AsyncMock()
+        mock_locator.or_ = MagicMock(return_value=mock_locator)
+        mock_locator.first = AsyncMock()
+        mock_locator.first.wait_for = AsyncMock()
+        mock_locator.count = AsyncMock(return_value=1)
+        mock_locator.last = AsyncMock()
+        mock_locator.nth = MagicMock(return_value=AsyncMock())
+        mock_locator.nth.return_value.wait_for = AsyncMock()
+        mock_locator.nth.return_value.click = AsyncMock()
+        mock_locator.nth.return_value.text_content = AsyncMock(return_value="Easy Apply")
+        mock_locator.last.wait_for = AsyncMock()
+        mock_locator.last.click = AsyncMock()
+        mock_locator.last.text_content = AsyncMock(return_value="Easy Apply")
+        
+        page.locator = MagicMock(return_value=mock_locator)
+        page.get_by_role = MagicMock(return_value=mock_locator)
+        page.wait_for_selector = AsyncMock()
+        
         await click_easy_apply_button(page)
 
-        mock_executor_instance.click.assert_called_once_with(
-            selectors.get("easy_apply_button", "div.jobs-apply-button--top-card button")
-        )
+        # Verify execute_operation was called (used internally by click_easy_apply_button)
+        mock_executor_instance.execute_operation.assert_called()
 
     @pytest.mark.asyncio
     async def test_click_easy_apply_button_timeout(self):
         page = AsyncMock()
-        mock_executor_instance.click.side_effect = TimeoutError("Timeout")
+        
+        # Mock locator chain methods
+        mock_locator = AsyncMock()
+        mock_locator.or_ = MagicMock(return_value=mock_locator)
+        mock_locator.first = AsyncMock()
+        mock_locator.first.wait_for = AsyncMock()
+        mock_locator.count = AsyncMock(return_value=1)
+        mock_locator.last = AsyncMock()
+        mock_locator.nth = MagicMock(return_value=AsyncMock())
+        mock_locator.nth.return_value.wait_for = AsyncMock()
+        mock_locator.nth.return_value.click = AsyncMock()
+        mock_locator.nth.return_value.text_content = AsyncMock(return_value="Easy Apply")
+        mock_locator.last.wait_for = AsyncMock()
+        mock_locator.last.click = AsyncMock()
+        mock_locator.last.text_content = AsyncMock(return_value="Easy Apply")
+        
+        page.locator = MagicMock(return_value=mock_locator)
+        page.get_by_role = MagicMock(return_value=mock_locator)
+        page.wait_for_selector = AsyncMock()
+        
+        mock_executor_instance.execute_operation.side_effect = TimeoutError("Timeout")
 
         with pytest.raises(TimeoutError):
             await click_easy_apply_button(page)
 
-        mock_executor_instance.click.assert_called_once_with(
-            selectors.get("easy_apply_button", "div.jobs-apply-button--top-card button")
-        )
-        mock_executor_instance.click.side_effect = None  # cleanup for other tests
+        mock_executor_instance.execute_operation.assert_called()
+        mock_executor_instance.execute_operation.side_effect = None  # cleanup for other tests
 
 
 class TestApplyToJob:

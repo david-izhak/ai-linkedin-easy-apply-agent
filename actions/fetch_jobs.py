@@ -14,57 +14,11 @@ from core.utils import (
 )
 from config import config  # Import new config object
 from core import database
-from core import resilience
+from core.resilience import get_resilience_executor
 import sqlite3
 from config import AppConfig
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_TEXT_RETRY_DELAYS = (3, 6, 9)
-DEFAULT_TEXT_RETRY_LABEL = "/".join(str(delay) for delay in DEFAULT_TEXT_RETRY_DELAYS)
-
-
-async def _extract_text_with_retry(locator, label: str, delays=DEFAULT_TEXT_RETRY_DELAYS):
-    """Scrolls to the locator and attempts to retrieve non-empty text with retries."""
-    delay_sequence_label = "/".join(str(delay) for delay in delays)
-    for delay in delays:
-        try:
-            await locator.scroll_into_view_if_needed()
-        except PlaywrightError as scroll_error:
-            logger.debug(
-                "%s locator not ready for scrolling (delay %s): %s",
-                label,
-                delay,
-                scroll_error,
-            )
-            await asyncio.sleep(0.5)
-            continue
-
-        await asyncio.sleep(delay)
-
-        try:
-            text = (await locator.inner_text()).strip()
-        except PlaywrightError as read_error:
-            logger.debug(
-                "Failed to read %s text (delay %s): %s",
-                label,
-                delay,
-                read_error,
-            )
-            continue
-
-        if text:
-            return text
-
-        logger.debug(
-            "%s still empty after waiting %s seconds.",
-            label,
-            delay,
-        )
-
-    raise TimeoutError(
-        f"{label} text did not load after waiting {delay_sequence_label} seconds."
-    )
 
 
 async def _ensure_all_jobs_are_loaded(page: Page) -> None:
@@ -121,7 +75,7 @@ async def _get_total_job_count(page: Page, url: str) -> int:
         'small.jobs-search-results-list__text',
         '.results-context-header__job-count',
     ]
-    executor = resilience.get_selector_executor(page)
+    executor = get_resilience_executor(page)
 
     for selector in job_count_selectors:
         try:
@@ -260,7 +214,8 @@ async def fetch_job_links_user(
     }
     initial_url = f"{base_url}?{urlencode(initial_params)}&start=0"
     logger.info(f"Navigating to initial search URL: {initial_url}")
-    await page.goto(initial_url, wait_until="load")
+    executor = get_resilience_executor(page)
+    await executor.navigate(initial_url, wait_until="load")
 
     num_available_jobs = await _get_total_job_count(page, initial_url)
     if num_available_jobs == 0:
@@ -368,6 +323,7 @@ async def fetch_job_links_user(
 async def _scrape_job_page_details(page: Page, link: str) -> dict:
     """Scrapes details from the main job listing page."""
     logger.debug(f"Scraping job details for {link}...")
+    executor = get_resilience_executor(page)
     details = {}
     description_element_selector = selectors["job_description"]
     logger.debug(f"For description_element from job page using selector: {description_element_selector}")
@@ -392,7 +348,7 @@ async def _scrape_job_page_details(page: Page, link: str) -> dict:
 
     if description_locator_ready:
         try:
-            description_text = await _extract_text_with_retry(
+            description_text = await executor.extract_text_with_retry(
                 description_locator,
                 "Job description",
             )
@@ -412,29 +368,55 @@ async def _scrape_job_page_details(page: Page, link: str) -> dict:
             description_element_selector,
         )
 
+    company_description_selector = selectors["company_description"]
+    company_description_locator = page.locator(company_description_selector).first
+    company_description_ready = True
     try:
-        company_description_element = await page.query_selector(
-            selectors["company_description"]
+        await company_description_locator.wait_for(
+            state="attached",
+            timeout=config.performance.max_wait_ms,
         )
-        if company_description_element:
-            description_text = await company_description_element.inner_text()
-            details["company_description"] = description_text
-            logger.debug(f"Found company description: {description_text[:100]}...")
-        else:
-            logger.warning(f"Company description selector did not find any element. Selector: {description_element_selector}")
-    except Exception as e:
+        await company_description_locator.wait_for(
+            state="visible",
+            timeout=config.performance.max_wait_ms,
+        )
+    except PlaywrightTimeoutError:
         logger.warning(
-            f"Could not fetch company description on job page for {link}. Exception: {e}",
-            exc_info=True,
+            "Company description locator `%s` did not become ready within %s ms.",
+            company_description_selector,
+            config.performance.max_wait_ms,
+        )
+        company_description_ready = False
+
+    if company_description_ready:
+        try:
+            company_description_text = await executor.extract_text_with_retry(
+                company_description_locator,
+                "Company description",
+            )
+            details["company_description"] = company_description_text
+            logger.debug(f"Found company description: {company_description_text[:100]}...")
+        except TimeoutError:
+            logger.warning("Timed out waiting for company description text.")
+        except Exception as e:
+            logger.warning(
+                f"Could not fetch company description on job page for {link}. Exception: {e}",
+                exc_info=True,
+            )
+    else:
+        logger.warning(
+            "Company description selector did not find any element. Selector: %s",
+            company_description_selector,
         )
 
     try:
+        # Note: query_selector_all doesn't have retry wrapper, but individual elements are non-critical
         employment_type_elements = await page.query_selector_all(
             selectors["employment_type_details"]
         )
         if employment_type_elements:
             employment_types = [
-                await el.inner_text() for el in employment_type_elements
+                (await el.inner_text()).strip() for el in employment_type_elements
             ]
             details["employment_type"] = ", ".join(employment_types[:2])
             logger.debug(f"Found employment type: {details['employment_type']}")
@@ -451,9 +433,10 @@ async def _scrape_job_page_details(page: Page, link: str) -> dict:
 
 async def _scrape_company_about_page(page: Page, about_url: str) -> dict:
     """Scrapes details from the company's 'About' page."""
+    executor = get_resilience_executor(page)
     details = {}
     logger.info(f"Navigating to company 'About' page: {about_url}")
-    await page.goto(about_url, wait_until="load")
+    await executor.navigate(about_url, wait_until="load")
 
     overview_selector = selectors["company_about_overview"]
     overview_locator = page.locator(overview_selector).first
@@ -477,7 +460,7 @@ async def _scrape_company_about_page(page: Page, about_url: str) -> dict:
 
     if overview_ready:
         try:
-            overview_text = await _extract_text_with_retry(
+            overview_text = await executor.extract_text_with_retry(
                 overview_locator,
                 "Company overview",
             )
@@ -485,8 +468,7 @@ async def _scrape_company_about_page(page: Page, about_url: str) -> dict:
             logger.debug(f"Found company overview: {overview_text[:100]}...")
         except TimeoutError:
             logger.warning(
-                "Timed out waiting for company overview text after %s seconds.",
-                DEFAULT_TEXT_RETRY_LABEL,
+                "Timed out waiting for company overview text."
             )
         except Exception as e:
             logger.warning(
@@ -526,7 +508,8 @@ async def _scrape_company_about_page(page: Page, about_url: str) -> dict:
                 )
 
             detail_pairs = []
-            for delay in DEFAULT_TEXT_RETRY_DELAYS:
+            text_extraction_delays = config.resilience.text_extraction_delays
+            for delay in text_extraction_delays:
                 await asyncio.sleep(delay)
                 try:
                     evaluation_result = await details_list_locator.evaluate(
@@ -625,9 +608,9 @@ async def _scrape_company_about_page(page: Page, about_url: str) -> dict:
                             )
                             details["company_founded"] = 0
             else:
+                delay_label = "/".join(str(d) for d in text_extraction_delays)
                 logger.warning(
-                    "Company details list did not load after waiting %s seconds.",
-                    DEFAULT_TEXT_RETRY_LABEL,
+                    f"Company details list did not load after waiting {delay_label} seconds."
                 )
         except Exception as e:
             logger.warning(
@@ -652,19 +635,31 @@ async def fetch_job_details(page: Page, link: str, noncritical_error_tracker: di
                    missing company profile link) are logged but don't raise exceptions.
     """
     logger.debug(f"Fetching all details for job page: {link}")
+    executor = get_resilience_executor(page)
 
     full_link = construct_full_url(link)
 
-    await page.goto(full_link, wait_until="load")
+    await executor.navigate(full_link, wait_until="load")
 
     details = await _scrape_job_page_details(page, full_link)
 
     # Scrape details from the company's about page
     company_about_details = {}
     try:
+        company_profile_link_selector = selectors["company_profile_link"]
+        company_profile_link_locator = page.locator(company_profile_link_selector).first
+        company_profile_link_element = None
         try:
-            company_profile_link_element = await page.query_selector(
-                selectors["company_profile_link"]
+            await company_profile_link_locator.wait_for(
+                state="attached",
+                timeout=config.performance.max_wait_ms,
+            )
+            company_profile_link_element = company_profile_link_locator
+        except PlaywrightTimeoutError:
+            logger.warning(
+                "Company profile link locator `%s` did not become ready within %s ms.",
+                company_profile_link_selector,
+                config.performance.max_wait_ms,
             )
         except Exception as e:
             # Non-critical: if we can't find the company link selector, just log and continue
@@ -679,7 +674,6 @@ async def fetch_job_details(page: Page, link: str, noncritical_error_tracker: di
                     noncritical_error_tracker["company_link_query"],
                     link,
                 )
-            company_profile_link_element = None
         
         if company_profile_link_element:
             if noncritical_error_tracker is not None and noncritical_error_tracker.get("company_link_query", 0) > 0:
@@ -688,6 +682,8 @@ async def fetch_job_details(page: Page, link: str, noncritical_error_tracker: di
             company_href = await company_profile_link_element.get_attribute("href")
             if company_href:
                 about_url = construct_full_url(company_href).replace("/life", "/about")
+                if not about_url.endswith("/"):
+                    about_url = f"{about_url}/"
                 try:
                     company_about_details = await _scrape_company_about_page(
                         page, about_url

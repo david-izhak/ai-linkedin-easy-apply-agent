@@ -2,7 +2,7 @@ from playwright.async_api import Page
 import structlog
 
 from core.selectors import selectors
-from core.resilience import get_selector_executor
+from core.resilience import get_resilience_executor
 from core.logger import get_structured_logger
 
 
@@ -18,7 +18,7 @@ async def click_next_button(page: Page, job_id: str = None, job_title: str = Non
         job_title: Optional job title for context
     """
     logger = get_structured_logger(__name__)
-    executor = get_selector_executor(page)
+    executor = get_resilience_executor(page)
     
     # Create context for logging and metrics
     context = {}

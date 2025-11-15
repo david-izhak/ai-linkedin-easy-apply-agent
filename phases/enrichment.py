@@ -9,6 +9,7 @@ from playwright.async_api import BrowserContext, Error as PlaywrightError, Page
 from config import config, AppConfig # Import the new config object
 from actions.fetch_jobs import fetch_job_details
 from core.database import get_jobs_to_enrich, save_enrichment_data, update_job_status
+from core.resilience import get_resilience_executor
 from diagnostics import DiagnosticOptions, DiagnosticContext, capture_on_failure
 
 logger = logging.getLogger(__name__)
@@ -106,8 +107,7 @@ async def _save_error_snapshot(page: Page | None, job_id: int, link: str) -> Non
 async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, title: str, app_config: AppConfig, noncritical_error_tracker: dict | None = None) -> bool:
     """Enrich a single job by opening its page and fetching details.
 
-    Implements retry logic with exponential backoff: 3 attempts total
-    (1 initial + 2 retries) with increasing wait times between retries.
+    Uses unified retry mechanism with exponential backoff and cleanup between attempts.
 
     Args:
         context: The Playwright browser context to create pages from.
@@ -115,59 +115,69 @@ async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, ti
         link: URL to the job details page.
         title: Title of the job, used for logging.
         app_config: The application configuration object.
+        noncritical_error_tracker: Optional tracker for noncritical errors.
 
     Returns:
         bool: True if enrichment was successful, False otherwise.
     """
     logger.info(f"Enriching job: {title} (ID: {job_id})")
     
-    max_attempts = 4
-    initial_wait_seconds = 20.0
-    exponential_base = 2
-    
+    # Store page reference for cleanup
     page: Page | None = None
     
-    try:
-        for attempt in range(1, max_attempts + 1):
-            try:
-                # Close previous page if it exists (from retry)
-                if page:
-                    await _safe_close_page(page)
-                    page = None
-                
-                page = await context.new_page()
-                # Pass noncritical error tracker to allow systemic error detection downstream
-                details = await fetch_job_details(page, link, noncritical_error_tracker)  # type: ignore[arg-type]
-                
-                if not details:
-                    raise ValueError("No details were fetched for the job.")
-                
-                logger.info(f"Successfully scraped details for job ID {job_id} (attempt {attempt}/{max_attempts}).")
+    async def _enrich_job_operation() -> bool:
+        """Internal operation function for enrichment workflow."""
+        nonlocal page
+        
+        # Close previous page if it exists (from retry)
+        if page:
+            await _safe_close_page(page)
+            page = None
+        
+        # Create new page for this attempt
+        page = await context.new_page()
+        
+        # Pass noncritical error tracker to allow systemic error detection downstream
+        details = await fetch_job_details(page, link, noncritical_error_tracker)  # type: ignore[arg-type]
+        
+        if not details:
+            raise ValueError("No details were fetched for the job.")
+        
+        logger.info(f"Successfully scraped details for job ID {job_id}.")
 
-                logger.debug(f"Attempting to save details for job ID {job_id} to the database.")
-                save_enrichment_data(job_id, details, app_config.session.db_conn)
-                logger.info(f"Successfully saved details for job ID {job_id}.")
-                
-                # Success - close page and exit the retry loop
-                await _safe_close_page(page)
-                page = None
-                return True
-                
-            except (PlaywrightError, Exception) as e:  # noqa: BLE001
-                if attempt < max_attempts:
-                    # Calculate wait time with exponential backoff
-                    wait_seconds = initial_wait_seconds * (exponential_base ** (attempt - 1))
-                    logger.warning(
-                        f"Attempt {attempt}/{max_attempts} failed for job ID {job_id}. "
-                        f"Error: {e}. Retrying in {wait_seconds:.1f} seconds..."
-                    )
-                    await asyncio.sleep(wait_seconds)
-                else:
-                    # All attempts exhausted - re-raise to be handled by outer except
-                    raise
+        logger.debug(f"Attempting to save details for job ID {job_id} to the database.")
+        save_enrichment_data(job_id, details, app_config.session.db_conn)
+        logger.info(f"Successfully saved details for job ID {job_id}.")
+        
+        # Success - close page
+        await _safe_close_page(page)
+        page = None
+        return True
+    
+    async def cleanup_between_attempts() -> None:
+        """Cleanup function called between retry attempts."""
+        nonlocal page
+        if page:
+            await _safe_close_page(page)
+            page = None
+    
+    # Create a temporary page for executor initialization
+    # The executor needs a page instance, but the actual page for enrichment is created in the operation
+    temp_page: Page | None = None
+    try:
+        temp_page = await context.new_page()
+        executor = get_resilience_executor(temp_page)
+        
+        result = await executor.execute_workflow_with_retry(
+            operation_name="enrich_job",
+            operation=_enrich_job_operation,
+            cleanup_between_attempts=cleanup_between_attempts,
+            context={"job_id": job_id, "link": link, "title": title}
+        )
+        return result
     except PlaywrightError as e:
         logger.error(
-            f"All {max_attempts} attempts exhausted. A Playwright error occurred "
+            f"All attempts exhausted. A Playwright error occurred "
             f"while enriching job ID {job_id} at URL {link}: {e}"
         )
         # Collect diagnostics if enabled
@@ -198,7 +208,7 @@ async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, ti
         return False
     except Exception as e:  # noqa: BLE001
         logger.error(
-            f"All {max_attempts} attempts exhausted. An unexpected error occurred "
+            f"All attempts exhausted. An unexpected error occurred "
             f"while enriching job ID {job_id} at URL {link}. Exception: {e}",
             exc_info=True,
         )
@@ -228,7 +238,9 @@ async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, ti
         update_job_status(job_id, "enrichment_error", app_config.session.db_conn)
         return False
     finally:
+        # Ensure all pages are closed
         await _safe_close_page(page)
+        await _safe_close_page(temp_page)
         # Wait for a bit before processing the next job to avoid rate-limiting
         await wait(app_config.general_settings.wait_between_enrichments_ms)
 
