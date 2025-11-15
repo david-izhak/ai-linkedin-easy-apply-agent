@@ -28,8 +28,12 @@
 | `company_website` | TEXT | Сайт компании. |
 | `company_industry` | TEXT | Индустрия компании. |
 | `company_size` | TEXT | Размер компании (сотрудники). |
+| `company_headquarters` | TEXT | Штаб-квартира компании. |
+| `company_specialties` | TEXT | Специализации компании. |
+| `company_founded` | INTEGER | Год основания компании. |
 | `match_percentage` | INTEGER | Процент соответствия, рассчитанный LLM (0-100). |
 | `analysis` | TEXT | Обоснование оценки от LLM. |
+| `applide_at` | TIMESTAMP | Дата и время подачи заявки на вакансию. |
 
 ### Жизненный цикл статуса (`status`)
 

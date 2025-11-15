@@ -531,17 +531,43 @@ async def _scrape_company_about_page(page: Page, about_url: str) -> dict:
                 try:
                     evaluation_result = await details_list_locator.evaluate(
                         """(node) => {
-                            const dts = Array.from(node.querySelectorAll('dt'));
-                            const dds = Array.from(node.querySelectorAll('dd'));
                             const pairs = [];
-                            const limit = Math.min(dts.length, dds.length);
-                            for (let i = 0; i < limit; i += 1) {
-                                const term = dts[i].innerText.trim().toLowerCase();
-                                const definition = dds[i].innerText.trim();
-                                if (term && definition) {
+                            const dts = Array.from(node.querySelectorAll('dt'));
+                            
+                            for (let i = 0; i < dts.length; i += 1) {
+                                const dt = dts[i];
+                                const term = dt.innerText.trim().toLowerCase();
+                                
+                                // Find the next dt (if exists) to know where to stop looking for dd elements
+                                const nextDt = i + 1 < dts.length ? dts[i + 1] : null;
+                                
+                                // Find all dd elements that come after this dt but before the next dt
+                                let currentElement = dt.nextElementSibling;
+                                const definitions = [];
+                                
+                                while (currentElement && currentElement !== nextDt) {
+                                    if (currentElement.tagName === 'DD') {
+                                        const definition = currentElement.innerText.trim();
+                                        // Skip empty definitions and tooltip/button content
+                                        // Filter out "associated members" and similar secondary information
+                                        if (definition && 
+                                            !definition.includes('LinkedIn members who') &&
+                                            !definition.includes('associated members')) {
+                                            definitions.push(definition);
+                                        }
+                                    }
+                                    currentElement = currentElement.nextElementSibling;
+                                }
+                                
+                                // Use the first non-empty definition (skip additional dd elements like "associated members")
+                                if (definitions.length > 0 && term) {
+                                    // For "company size", prefer the first definition (employee count)
+                                    // For other fields, use the first definition
+                                    const definition = definitions[0];
                                     pairs.push([term, definition]);
                                 }
                             }
+                            
                             return pairs;
                         }"""
                     )
@@ -573,6 +599,31 @@ async def _scrape_company_about_page(page: Page, about_url: str) -> dict:
                     elif term == "company size":
                         details["company_size"] = definition
                         logger.debug(f"Found company size: {definition}")
+                    elif term == "headquarters":
+                        details["company_headquarters"] = definition
+                        logger.debug(f"Found company headquarters: {definition}")
+                    elif term == "specialties":
+                        details["company_specialties"] = definition
+                        logger.debug(f"Found company specialties: {definition}")
+                    elif term == "founded":
+                        # Try to extract year from the definition
+                        try:
+                            # Look for 4-digit year (e.g., "2015", "Founded in 2015")
+                            year_match = re.search(r'\b(19|20)\d{2}\b', definition)
+                            if year_match:
+                                founded_year = int(year_match.group(0))
+                                details["company_founded"] = founded_year
+                                logger.debug(f"Found company founded year: {founded_year}")
+                            else:
+                                # If no year found, try to parse as integer
+                                founded_year = int(definition.strip())
+                                details["company_founded"] = founded_year
+                                logger.debug(f"Found company founded year: {founded_year}")
+                        except (ValueError, AttributeError):
+                            logger.warning(
+                                f"Could not parse founded year from '{definition}'. Setting to 0."
+                            )
+                            details["company_founded"] = 0
             else:
                 logger.warning(
                     "Company details list did not load after waiting %s seconds.",

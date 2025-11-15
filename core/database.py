@@ -41,11 +41,40 @@ def init_db(conn: sqlite3.Connection):
             company_website TEXT,
             company_industry TEXT,
             company_size TEXT,
+            company_headquarters TEXT,
+            company_specialties TEXT,
+            company_founded INTEGER NOT NULL DEFAULT 0,
             match_percentage INTEGER,
-            analysis TEXT
+            analysis TEXT,
+            applide_at TIMESTAMP
         )
     """
     )
+    
+    # Migration: Add new columns if they don't exist (for existing databases)
+    try:
+        cursor.execute("ALTER TABLE vacancies ADD COLUMN company_headquarters TEXT")
+        logger.debug("Added column company_headquarters")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    try:
+        cursor.execute("ALTER TABLE vacancies ADD COLUMN company_specialties TEXT")
+        logger.debug("Added column company_specialties")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    try:
+        cursor.execute("ALTER TABLE vacancies ADD COLUMN company_founded INTEGER NOT NULL DEFAULT 0")
+        logger.debug("Added column company_founded")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    
+    try:
+        cursor.execute("ALTER TABLE vacancies ADD COLUMN applide_at TIMESTAMP")
+        logger.debug("Added column applide_at")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     # Run history table
     cursor.execute(
         """
@@ -124,6 +153,9 @@ def save_enrichment_data(job_id: int, details: dict, conn: sqlite3.Connection):
             company_website = ?,
             company_industry = ?,
             company_size = ?,
+            company_headquarters = ?,
+            company_specialties = ?,
+            company_founded = ?,
             match_percentage = ?,
             analysis = ?
         WHERE id = ?
@@ -136,6 +168,9 @@ def save_enrichment_data(job_id: int, details: dict, conn: sqlite3.Connection):
             details.get("company_website"),
             details.get("company_industry"),
             details.get("company_size"),
+            details.get("company_headquarters"),
+            details.get("company_specialties"),
+            details.get("company_founded", 0),
             details.get("match_percentage"),
             details.get("analysis"),
             job_id,
@@ -206,10 +241,20 @@ def get_error_jobs(conn: sqlite3.Connection) -> list:
 def update_job_status(job_id: int, status: str, conn: sqlite3.Connection):
     """
     Updates the status of a job identified by its job_id.
+    If status is 'applied', also sets applide_at to current timestamp.
     """
     logger.debug(f"Updating status to '{status}' for job_id: {job_id}")
     cursor = conn.cursor()
-    cursor.execute("UPDATE vacancies SET status = ? WHERE id = ?", (status, job_id))
+    
+    if status == "applied":
+        now = datetime.datetime.now()
+        cursor.execute(
+            "UPDATE vacancies SET status = ?, applide_at = ? WHERE id = ?",
+            (status, now, job_id)
+        )
+    else:
+        cursor.execute("UPDATE vacancies SET status = ? WHERE id = ?", (status, job_id))
+    
     conn.commit()
 
 
