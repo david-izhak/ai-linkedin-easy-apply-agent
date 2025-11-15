@@ -10,6 +10,7 @@ from config import config, AppConfig
 from diagnostics import DiagnosticOptions, DiagnosticContext, capture_on_failure
 from actions.apply import apply_to_job
 from core.database import get_enriched_jobs, get_error_jobs, update_job_status
+from core.selectors import selectors
 from llm.vacancy_filter import is_vacancy_suitable
 from core.utils import construct_full_url
 from core.form_filler import (
@@ -116,7 +117,7 @@ async def _process_single_job(
         # Skip postings that are no longer open for applications.
         # Try multiple methods to find the text, as it might be in different states
         try:
-            closed_locator = page.get_by_text("No longer accepting applications", exact=False)
+            closed_locator = page.get_by_text(selectors["applications_closed_text"], exact=False)
             count = await closed_locator.count()
             
             if count > 0:
@@ -150,7 +151,7 @@ async def _process_single_job(
         # Additional check: if Easy Apply button is disabled, the vacancy might be closed
         # This is a heuristic check before we try to click the button
         try:
-            easy_apply_button = page.locator("button[data-view-name='job-apply-button']").first
+            easy_apply_button = page.locator(selectors["easy_apply_button_by_data_view"]).first
             button_count = await easy_apply_button.count()
             if button_count > 0:
                 is_disabled = await easy_apply_button.is_disabled()
@@ -162,7 +163,7 @@ async def _process_single_job(
                     # Try to find the "No longer accepting applications" message again
                     # Sometimes it appears after button is rendered
                     await asyncio.sleep(1)
-                    closed_check = page.get_by_text("No longer accepting applications", exact=False)
+                    closed_check = page.get_by_text(selectors["applications_closed_text"], exact=False)
                     closed_count = await closed_check.count()
                     if closed_count > 0:
                         try:

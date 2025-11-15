@@ -147,7 +147,7 @@ async def click_easy_apply_button(page: Page) -> None:
             # First, try the specific Easy Apply modal class (most reliable)
             try:
                 await page.wait_for_selector(
-                    '.jobs-easy-apply-modal',
+                    selectors["easy_apply_modal"],
                     state="visible",
                     timeout=5000
                 )
@@ -167,7 +167,7 @@ async def click_easy_apply_button(page: Page) -> None:
                     logger.debug("Dialog not found with get_by_role, trying generic selector...")
                     try:
                         await page.wait_for_selector(
-                            '[role="dialog"]',
+                            selectors["dialog_role"],
                             state="visible",
                             timeout=3000
                         )

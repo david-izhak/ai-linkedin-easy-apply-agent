@@ -75,10 +75,10 @@ class SelectorRetryOverrideConfig(BaseSettings):
 class JobSearchConfig(BaseSettings):
     """Parameters for job searching."""
 
-    keywords: str = "Software Engineer"
+    keywords: str = "Java Engineer" # "Software Engineer" "Backend Engineer"
     geo_id: str = "118490091"
     distance: str = "20"
-    job_search_period_seconds: int = 8640 # 30 days = 86400 / 7 days = 604800/ 4 days = 345600 / 2 days = 172800 / 1 day = 86400 / 3 days = 259200
+    job_search_period_seconds: int = 604800 # 30 days = 86400 / 7 days = 604800/ 4 days = 345600 / 2 days = 172800 / 1 day = 86400 / 3 days = 259200
     sort_by: str = "DD"  # DD = Date Descending, R = Relevance
     job_title_regex: str = r"(?i)^(?!.*(frontend|rust|laravel|php|junior|angular|driver|go(lang)|architect|qa|unity|technical|lead|teamlead|devops|salesforce|technology|llm|embedded|hardware|android|firmware|c\+\+|\.net|c#)).*?(automation|staff|sw|solution(s)|software|java|python|data|back\s*end|ai|chatbot|principal|full\s*stack|senior).*?.*?(developer|engineer).*$"
     job_description_regex: str = r".*"

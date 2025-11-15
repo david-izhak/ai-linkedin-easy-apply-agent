@@ -45,7 +45,7 @@ async def _ensure_all_jobs_are_loaded(page: Page) -> None:
                 logger.warning(f"Could not scroll to item {i + 1}. It might have been removed from DOM. Error: {e}")
 
         # Дополнительная прокрутка до конца на случай, если есть кнопка "Показать еще"
-        job_list_container = page.locator("div.jobs-search-results-list, div.scaffold-layout__list").first
+        job_list_container = page.locator(selectors["job_search_results_container"]).first
         if await job_list_container.is_visible():
             await job_list_container.evaluate("element => element.scrollTop = element.scrollHeight")
             await page.wait_for_timeout(1000)
@@ -71,9 +71,9 @@ async def _get_total_job_count(page: Page, url: str) -> int:
     """Gets the total number of jobs from the search results page."""
     # More robust selectors to find the job count
     job_count_selectors = [
-        ".jobs-search-results-list__subtitle span[dir='ltr']",
-        'small.jobs-search-results-list__text',
-        '.results-context-header__job-count',
+        selectors["job_count_subtitle"],
+        selectors["job_count_text"],
+        selectors["job_count_header"],
     ]
     executor = get_resilience_executor(page)
 
@@ -99,7 +99,7 @@ async def _get_total_job_count(page: Page, url: str) -> int:
 
     # Fallback if selectors fail or text parsing fails
     try:
-        job_cards = await page.query_selector_all('div.job-card-container[data-job-id]')
+        job_cards = await page.query_selector_all(selectors["job_card_container"])
         return len(job_cards)
     except Exception as e:
         logger.error(f"Fallback to counting job cards failed. Error: {e}")
@@ -133,9 +133,9 @@ async def _extract_job_data_from_page(page: Page) -> list:
             
             job_id = int(job_id_str)
 
-            link_element = await listing.query_selector("a.job-card-container__link")
-            title_element = await listing.query_selector("a.job-card-container__link strong")
-            company_element = await listing.query_selector("div.artdeco-entity-lockup__subtitle span")
+            link_element = await listing.query_selector(selectors["job_card_link"])
+            title_element = await listing.query_selector(selectors["job_card_title"])
+            company_element = await listing.query_selector(selectors["job_card_company"])
 
             if not all([link_element, title_element, company_element]):
                 logger.warning(f"Could not find all required elements for job ID {job_id}. Skipping.")
@@ -299,7 +299,7 @@ async def fetch_job_links_user(
             break
 
         # Check for and click the 'Next' pagination button
-        next_button_selector = "button.jobs-search-pagination__button--next"
+        next_button_selector = selectors["pagination_next_button"]
         if await page.is_visible(next_button_selector, timeout=2000):
             logger.info("Found 'Next' pagination button. Clicking it...")
             await page.click(next_button_selector)

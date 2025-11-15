@@ -16,7 +16,7 @@ async def _process_select_element(
         if not select_id:
             return
 
-        label_selector = f"label[for='{select_id}']"
+        label_selector = selectors["label_for"].format(id=select_id)
         label_element = await page.query_selector(label_selector)
         if not label_element:
             return
@@ -28,7 +28,7 @@ async def _process_select_element(
                 logger.debug(
                     f"Found select field '{label_text}' matching regex '{label_regex}'."
                 )
-                options = await select_element.query_selector_all(selectors["option"])
+                options = await select_element.query_selector_all(selectors["select_option"])
                 for option_element in options:
                     option_text = await option_element.inner_text()
                     # Use strip() and lower() for a more robust comparison

@@ -13,7 +13,7 @@ async def _process_single_radio_fieldset(fieldset: ElementHandle, booleans: dict
         if len(radio_inputs) != 2:
             return  # Not a 2-option radio group
 
-        legend_element = await fieldset.query_selector("legend")
+        legend_element = await fieldset.query_selector(selectors["legend"])
         if not legend_element:
             return  # No legend found to match against
 
@@ -50,7 +50,7 @@ async def _process_single_checkbox(page: Page, checkbox: ElementHandle, booleans
         if not checkbox_id:
             return
 
-        label_selector = f"label[for='{checkbox_id}']"
+        label_selector = selectors["label_for"].format(id=checkbox_id)
         label_element = await page.query_selector(label_selector)
         if not label_element:
             return
@@ -79,7 +79,7 @@ async def _process_single_select(
 ):
     """Processes a single 2-option select dropdown."""
     try:
-        options = await select_element.query_selector_all(selectors["option"])
+        options = await select_element.query_selector_all(selectors["select_option"])
         if options and "select" in (await options[0].inner_text()).lower():
             options.pop(0)  # Remove placeholder option
 
@@ -90,7 +90,7 @@ async def _process_single_select(
         if not select_id:
             return
 
-        label_selector = f"label[for='{select_id}']"
+        label_selector = selectors["label_for"].format(id=select_id)
         label_element = await page.query_selector(label_selector)
         if not label_element:
             return

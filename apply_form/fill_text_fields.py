@@ -21,7 +21,7 @@ async def fill_text_fields(page: Page, text_fields: dict):
             # Get the ID of the input to find its associated label
             input_id = await input_element.get_attribute("id")
             if input_id:
-                label_selector = f"label[for='{input_id}']"
+                label_selector = selectors["label_for"].format(id=input_id)
                 label_element = await page.query_selector(label_selector)
                 if label_element:
                     label_text = await label_element.inner_text()

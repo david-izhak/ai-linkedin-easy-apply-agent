@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from playwright.async_api import Page, Locator, expect
 
+from core.selectors import selectors
 from modal_flow.profile_schema import CandidateProfile
 from modal_flow.rules_store import RuleStore
 from modal_flow.normalizer import QuestionNormalizer
@@ -28,7 +29,6 @@ from modal_flow.document_upload import (
 # Regex patterns for navigation buttons
 NEXT_BTN_RX = re.compile(r"(next|continue|review|proceed|далее|продолжить|обзор|проверить)", re.I)
 SUBMIT_BTN_RX = re.compile(r"(submit|send|finish|отправить|подтвердить|submit application)", re.I)
-SPINNER_SELECTOR = '[aria-busy="true"], [data-loading="true"]'
 VALIDATION_ERROR_RX = re.compile(r"(error|invalid|required|неверный|ошибка|обязательное)", re.I)
 
 
@@ -344,7 +344,7 @@ class ModalFlowRunner:
                 
                 # Try to identify which field has the error
                 try:
-                    parent = error.locator('xpath=ancestor::*[@class or @id][1]')
+                    parent = error.locator(selectors["xpath_ancestor_with_class_or_id"])
                     parent_info = await parent.evaluate(
                         """(el) => ({
                             tag: el.tagName,
@@ -687,7 +687,7 @@ class ModalFlowRunner:
                     /* ignore */
                 }
 
-                const container = el.closest('[data-test-text-selectable-option]');
+                const container = el.closest(""" + repr(selectors["data_test_selectable_option"]) + """);
                 if (container) {
                     const labelCandidate = container.querySelector('label');
                     if (labelCandidate && labelCandidate.innerText) {
@@ -731,7 +731,7 @@ class ModalFlowRunner:
             await self._process_single_combobox(combo, question, modal, is_same_dialog=is_same_dialog)
         
         # Handle native select elements
-        selects = modal.locator("select")
+        selects = modal.locator("select")  # Using native select tag, not from selectors dict
         select_count = await selects.count()
         
         for i in range(select_count):
@@ -760,7 +760,7 @@ class ModalFlowRunner:
                     self.logger.debug(f"[SELECT] Could not determine select state: {e}")
 
             options = []
-            option_locators = await sel.locator("option").all()
+            option_locators = await sel.locator(selectors["select_option"]).all()
             for opt_loc in option_locators:
                 opt_text = await opt_loc.inner_text()
                 options.append(opt_text)
@@ -864,7 +864,7 @@ class ModalFlowRunner:
             # Strategy 1: Try to find LinkedIn-specific typeahead listbox by ID pattern in modal
             # This is the most reliable - LinkedIn uses IDs like "triggered-expanded-emberXXX"
             try:
-                typeahead_listbox = modal.locator('[id^="triggered-expanded-"][role="listbox"]')
+                typeahead_listbox = modal.locator(selectors["combobox_listbox_id_pattern"])
                 listbox_count = await typeahead_listbox.count()
                 
                 if listbox_count > 0:
@@ -885,7 +885,7 @@ class ModalFlowRunner:
             if not listbox:
                 try:
                     class_listbox = modal.locator(
-                        'div.basic-typeahead__triggered-content.fb-single-typeahead-entity__triggered-content[role="listbox"]'
+                        selectors["combobox_listbox_class"]
                     )
                     listbox_count = await class_listbox.count()
                     
@@ -906,7 +906,7 @@ class ModalFlowRunner:
             if not listbox:
                 try:
                     # Get all listboxes in modal, excluding native select elements
-                    modal_listboxes = modal.locator('[role="listbox"]:not(select)')
+                    modal_listboxes = modal.locator(selectors["combobox_listbox_role"])
                     listbox_count = await modal_listboxes.count()
                     
                     if listbox_count == 1:
@@ -1103,7 +1103,7 @@ class ModalFlowRunner:
     async def _handle_number_inputs(self, modal: Locator, is_same_dialog: bool = False):
         """Handle number input fields (input[type='number'])."""
         # Find all number inputs using CSS selector since they don't have textbox role
-        number_inputs = modal.locator('input[type="number"]')
+        number_inputs = modal.locator(selectors["number_input"])
         count = await number_inputs.count()
         
         self.logger.debug(f"Found {count} number input(s)")
@@ -1240,11 +1240,11 @@ class ModalFlowRunner:
                 return text.strip()
         
         # Try fieldset legend
-        legend = any_radio.locator("xpath=ancestor::fieldset[1]/legend")
+        legend = any_radio.locator(selectors["xpath_ancestor_fieldset_legend"])
         if await legend.count():
             # New: Try to find a specific title span within the legend for robustness
             title_span = legend.first.locator(
-                "span[data-test-form-builder-radio-button-form-component__title]"
+                selectors["radio_form_builder_title"]
             )
             if await title_span.count() > 0:
                 return (await title_span.first.inner_text()).strip()
@@ -1467,7 +1467,7 @@ class ModalFlowRunner:
         # Look for span with data-test attributes that contain label text
         try:
             data_test_label = element.locator(
-                "xpath=ancestor::*[contains(@class, 'form') or contains(@class, 'field') or contains(@class, 'input')][1]//span[contains(@data-test, 'title') or contains(@data-test, 'label')]"
+                selectors["xpath_ancestor_form_field"]
             )
             if await data_test_label.count() > 0:
                 label_text = await data_test_label.first.inner_text()
@@ -1908,7 +1908,7 @@ class ModalFlowRunner:
     
     async def _wait_for_spinners_to_disappear(self, timeout: int = 5000):
         """Wait for all loading spinners to disappear."""
-        spinners = self.page.locator(SPINNER_SELECTOR)
+        spinners = self.page.locator(selectors["loading_spinner"])
         count = await spinners.count()
         
         for i in range(count):
