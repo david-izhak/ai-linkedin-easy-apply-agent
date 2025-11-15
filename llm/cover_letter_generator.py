@@ -67,6 +67,13 @@ def generate_cover_letter(
             "company_website": job.get("company_website", NOT_SPECIFIED),
             "company_industry": job.get("company_industry", NOT_SPECIFIED),
             "company_size": job.get("company_size", NOT_SPECIFIED),
+            "company_headquarters": job.get("company_headquarters", NOT_SPECIFIED),
+            "company_founded": (
+                str(job.get("company_founded"))
+                if job.get("company_founded") and job.get("company_founded") > 0
+                else NOT_SPECIFIED
+            ),
+            "company_specialties": job.get("company_specialties", NOT_SPECIFIED),
             "resume_text": read_resume_text(app_config),
             # Add flags to the inputs dictionary to be used in the prompt template
             "include_ps": str(include_ps).lower(),

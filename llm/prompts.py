@@ -204,6 +204,9 @@ Your entire response MUST be a single JSON object matching the structure below. 
 - **Website:** {company_website}
 - **Industry:** {company_industry}
 - **Size:** {company_size}
+- **Headquarters:** {company_headquarters}
+- **Founded:** {company_founded}
+- **Specialties:** {company_specialties}
 
 **3. Candidate's Resume:**
 ```
