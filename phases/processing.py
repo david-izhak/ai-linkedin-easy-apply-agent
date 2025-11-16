@@ -115,35 +115,88 @@ async def _process_single_job(
         await asyncio.sleep(2)
         
         # Skip postings that are no longer open for applications.
-        # Try multiple methods to find the text, as it might be in different states
+        # Use multiple methods to find the text, as it might be in different states
         try:
-            closed_locator = page.get_by_text(selectors["applications_closed_text"], exact=False)
-            count = await closed_locator.count()
+            # Method 1: Try to find element with aria-live="assertive" containing the text
+            # This is more reliable than get_by_text for dynamically loaded content
+            closed_text_selector = 'div[aria-live="assertive"] p'
+            closed_elements = page.locator(closed_text_selector)
+            closed_count = await closed_elements.count()
             
-            if count > 0:
-                # Check if at least one instance is visible
+            found_closed = False
+            if closed_count > 0:
+                # Check each element for the text
+                for i in range(closed_count):
+                    element = closed_elements.nth(i)
+                    try:
+                        text_content = await element.text_content()
+                        if text_content and selectors["applications_closed_text"].lower() in text_content.lower():
+                            is_visible = await element.is_visible()
+                            if is_visible:
+                                logger.info(
+                                    "Vacancy '%s' is no longer accepting applications. Skipping.", title
+                                )
+                                update_job_status(
+                                    job_id, "applications_closed", app_config.session.db_conn
+                                )
+                                found_closed = True
+                                break
+                    except Exception as e:
+                        logger.debug(f"Error checking element {i} for closed text: {e}")
+                        continue
+            
+            # Method 2: Fallback to get_by_text if first method didn't find it
+            if not found_closed:
+                closed_locator = page.get_by_text(selectors["applications_closed_text"], exact=False)
+                count = await closed_locator.count()
+                
+                if count > 0:
+                    # Check if at least one instance is visible
+                    try:
+                        first_closed = closed_locator.first
+                        is_visible = await first_closed.is_visible()
+                        if is_visible:
+                            logger.info(
+                                "Vacancy '%s' is no longer accepting applications. Skipping.", title
+                            )
+                            update_job_status(
+                                job_id, "applications_closed", app_config.session.db_conn
+                            )
+                            found_closed = True
+                    except Exception as e:
+                        # If visibility check fails, still check count as fallback
+                        logger.debug(f"Visibility check failed for closed text: {e}, using count={count}")
+                        if count > 0:
+                            logger.info(
+                                "Vacancy '%s' is no longer accepting applications (detected by count). Skipping.", title
+                            )
+                            update_job_status(
+                                job_id, "applications_closed", app_config.session.db_conn
+                            )
+                            found_closed = True
+            
+            # Method 3: XPath fallback for complex cases
+            if not found_closed:
                 try:
-                    first_closed = closed_locator.first
-                    is_visible = await first_closed.is_visible()
-                    if is_visible:
-                        logger.info(
-                            "Vacancy '%s' is no longer accepting applications. Skipping.", title
-                        )
-                        update_job_status(
-                            job_id, "applications_closed", app_config.session.db_conn
-                        )
-                        return False
+                    xpath_selector = f'xpath=//div[@aria-live="assertive"]//p[contains(text(), "{selectors["applications_closed_text"]}")]'
+                    xpath_locator = page.locator(xpath_selector)
+                    xpath_count = await xpath_locator.count()
+                    if xpath_count > 0:
+                        is_visible = await xpath_locator.first.is_visible()
+                        if is_visible:
+                            logger.info(
+                                "Vacancy '%s' is no longer accepting applications (XPath). Skipping.", title
+                            )
+                            update_job_status(
+                                job_id, "applications_closed", app_config.session.db_conn
+                            )
+                            found_closed = True
                 except Exception as e:
-                    # If visibility check fails, still check count as fallback
-                    logger.debug(f"Visibility check failed for closed text: {e}, using count={count}")
-                    if count > 0:
-                        logger.info(
-                            "Vacancy '%s' is no longer accepting applications (detected by count). Skipping.", title
-                        )
-                        update_job_status(
-                            job_id, "applications_closed", app_config.session.db_conn
-                        )
-                        return False
+                    logger.debug(f"XPath method failed: {e}")
+            
+            if found_closed:
+                return False
+                
         except Exception as e:
             logger.debug(f"Error checking for 'No longer accepting applications' text: {e}")
             # Continue processing if check fails - better to try than to skip
@@ -163,20 +216,41 @@ async def _process_single_job(
                     # Try to find the "No longer accepting applications" message again
                     # Sometimes it appears after button is rendered
                     await asyncio.sleep(1)
-                    closed_check = page.get_by_text(selectors["applications_closed_text"], exact=False)
-                    closed_count = await closed_check.count()
-                    if closed_count > 0:
-                        try:
-                            if await closed_check.first.is_visible():
-                                logger.info(
-                                    "Vacancy '%s' is no longer accepting applications (button disabled). Skipping.", title
-                                )
-                                update_job_status(
-                                    job_id, "applications_closed", app_config.session.db_conn
-                                )
-                                return False
-                        except Exception:
-                            pass
+                    
+                    # Use the same multi-method approach
+                    found_closed = False
+                    try:
+                        # Method 1: aria-live selector
+                        closed_text_selector = 'div[aria-live="assertive"] p'
+                        closed_elements = page.locator(closed_text_selector)
+                        closed_count = await closed_elements.count()
+                        if closed_count > 0:
+                            for i in range(closed_count):
+                                element = closed_elements.nth(i)
+                                text_content = await element.text_content()
+                                if text_content and selectors["applications_closed_text"].lower() in text_content.lower():
+                                    if await element.is_visible():
+                                        found_closed = True
+                                        break
+                        
+                        # Method 2: get_by_text fallback
+                        if not found_closed:
+                            closed_check = page.get_by_text(selectors["applications_closed_text"], exact=False)
+                            closed_count = await closed_check.count()
+                            if closed_count > 0:
+                                if await closed_check.first.is_visible():
+                                    found_closed = True
+                    except Exception as e:
+                        logger.debug(f"Error in second closed check: {e}")
+                    
+                    if found_closed:
+                        logger.info(
+                            "Vacancy '%s' is no longer accepting applications (button disabled). Skipping.", title
+                        )
+                        update_job_status(
+                            job_id, "applications_closed", app_config.session.db_conn
+                        )
+                        return False
         except Exception as e:
             logger.debug(f"Error checking Easy Apply button state: {e}")
             # Continue processing if check fails
