@@ -1217,7 +1217,7 @@ rules:
   signature:
     field_type: text
     options_fingerprint: null
-    q_pattern: (your|message|hiring|manager)
+    q_pattern: (?=.*(message))(?=.*(hiring|manager))(?!.*notice)
   strategy:
     kind: literal
     params:
