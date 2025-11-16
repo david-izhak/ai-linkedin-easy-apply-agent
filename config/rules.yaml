@@ -1983,4 +1983,119 @@ rules:
     kind: literal
     params:
       value: true
+- constraints:
+    required: true
+  id: rls_1763288495
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-16T10:21:35Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: select
+    options_fingerprint: sha1:c9218b8b8a38b11d72cb4c0476221da0712643fe
+    q_pattern: (level|proficiency|уровень).*?(?P<language>english|английский|hebrew|иврит|russian|русский)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - "Professional"
+- constraints:
+    required: true
+  id: rls_1763288803
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-16T10:26:43Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:71e4d60f41af6338cf75aedadd8a2b015ea6c46d
+    q_pattern: (authorize|разрешаю).*?(process|обрабатывать).*?(data|данные).*?(share|делиться).*?(employers|работодателями)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'Yes'
+- constraints:
+    required: true
+  id: rls_1763289270
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-16T10:34:30Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:71e4d60f41af6338cf75aedadd8a2b015ea6c46d
+    q_pattern: (comfortable.*hybrid.*setting|work.*hybrid|гибридн.*формат|гибридн.*работа)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'Yes'
+- constraints:
+    required: true
+  id: rls_1763292325
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-16T11:25:25Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:71e4d60f41af6338cf75aedadd8a2b015ea6c46d
+    q_pattern: (comfortable.*commute|commute.*location|travel.*job location|готовность.*ездить|комфортно.*добираться)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'Yes'
+- constraints:
+    required: true
+  id: rls_1763292336
+  meta:
+    confidence: 1.0
+    created_at: '2025-11-16T11:25:36Z'
+    hits: 0
+    last_seen: null
+    source: llm
+  scope:
+    form_kind: job_apply
+    locale:
+    - en
+    site: '*'
+  signature:
+    field_type: radio
+    options_fingerprint: sha1:71e4d60f41af6338cf75aedadd8a2b015ea6c46d
+    q_pattern: (onsite|on-site|in-office|in office|офис|офисный|на месте).*?(work|setting|comfortable|готовность)
+  strategy:
+    kind: one_of_options
+    params:
+      preferred:
+      - 'Yes'
 schema_version: '1.0'
