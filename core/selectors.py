@@ -17,6 +17,7 @@ selectors = {
     "phone": ".jobs-easy-apply-modal input[id*='easyApplyFormElement'][id*='phoneNumber']",
     "document_upload": ".jobs-easy-apply-modal div[class*='jobs-document-upload']",
     "document_upload_label": "label[class*='jobs-document-upload']",
+    "document_upload_input_type_file": "input[type='file']",
     "document_upload_input": "input[type='file'][id*='jobs-document-upload']",
     "radio_input": "input[type='radio']",
     "option": "option",

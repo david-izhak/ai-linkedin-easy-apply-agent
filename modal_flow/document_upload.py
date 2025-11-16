@@ -11,6 +11,7 @@ from typing import Dict, Optional, TYPE_CHECKING
 
 from playwright.async_api import Locator, Page
 
+from core.selectors import selectors
 from llm.cover_letter_generator import generate_cover_letter, save_cover_letter
 from modal_flow.normalizer import QuestionNormalizer
 
@@ -34,7 +35,7 @@ class DocumentPaths:
             self.resume = Path(self.resume)
         if isinstance(self.cover_letter, str):
             self.cover_letter = Path(self.cover_letter)
-        for key, value in list(self.extra.items()):
+        for key, value in self.extra.items():
             if isinstance(value, str):
                 self.extra[key] = Path(value)
 
@@ -169,7 +170,7 @@ class ModalDocumentUploader:
         await self._maybe_upload(section, doc_type)
 
     async def _process_loose_inputs(self, modal: Locator) -> None:
-        inputs = modal.locator("input[type='file']")
+        inputs = modal.locator(selectors["document_upload_input_type_file"])
         count = await inputs.count()
 
         for idx in range(count):
@@ -184,7 +185,7 @@ class ModalDocumentUploader:
         if self._state.already_uploaded(doc_type):
             return
 
-        input_locator = section.locator("input[type='file']").first
+        input_locator = section.locator(selectors["document_upload_input_type_file"]).first
         if not await input_locator.count():
             button = section.get_by_role("button").filter(
                 has_text=re.compile("upload", re.I)
@@ -192,7 +193,7 @@ class ModalDocumentUploader:
             if await button.count():
                 await button.first.click()
                 await self._page.wait_for_timeout(200)
-                input_locator = section.locator("input[type='file']").first
+                input_locator = section.locator(selectors["document_upload_input_type_file"]).first
 
         if not await input_locator.count():
             return

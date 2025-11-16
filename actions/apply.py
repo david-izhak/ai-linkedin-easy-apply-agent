@@ -108,7 +108,7 @@ async def click_easy_apply_button(page: Page) -> None:
             )
             element_locator = locator.nth(1)
         else:
-            logger.info(f"Selecting the only Easy Apply button found")
+            logger.info("Selecting the only Easy Apply button found")
             structured_logger.debug(
                 "selecting_last_easy_apply_button",
                 total_elements=count
@@ -230,7 +230,7 @@ async def apply_to_job(
     except Exception as e:
         logger.error(
             f"Easy Apply button not found or not clickable for posting: {link}."
-            + "Skipping application.",
+            + "Skipping application. Error: {e}",
             exc_info=True,
         )
         raise

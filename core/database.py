@@ -21,7 +21,7 @@ def init_db(conn: sqlite3.Connection):
     """
     Creates the database tables on the given connection.
     """
-    logger.debug(f"Setting up database tables...")
+    logger.debug("Setting up database tables...")
     cursor = conn.cursor()
 
     # Vacancies table with job_id as the PRIMARY KEY
@@ -203,7 +203,7 @@ def get_enriched_jobs(conn: sqlite3.Connection) -> list:
     """
     Retrieves all jobs with the 'enriched' status, newest first.
     """
-    logger.debug(f"Getting enriched jobs.")
+    logger.debug("Getting enriched jobs.")
     cursor = conn.cursor()
     # Fetch all necessary fields for final filtering and application
     cursor.execute(
@@ -227,7 +227,7 @@ def get_error_jobs(conn: sqlite3.Connection) -> list:
     Returns:
         list: List of tuples containing (id, link, title, company, description).
     """
-    logger.debug(f"Getting jobs with error status for retry.")
+    logger.debug("Getting jobs with error status for retry.")
     cursor = conn.cursor()
     # Fetch all necessary fields for retry attempt
     cursor.execute(
