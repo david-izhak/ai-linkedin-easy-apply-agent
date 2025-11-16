@@ -28,7 +28,7 @@ from modal_flow.document_upload import (
 
 # Regex patterns for navigation buttons
 NEXT_BTN_RX = re.compile(r"(next|continue|review|proceed|далее|продолжить|обзор|проверить)", re.I)
-SUBMIT_BTN_RX = re.compile(r"(submit|send|finish|отправить|подтвердить|submit application)", re.I)
+SUBMIT_BTN_RX = re.compile(r"(submit|finish|отправить|подтвердить|submit application)", re.I)
 VALIDATION_ERROR_RX = re.compile(r"(error|invalid|required|неверный|ошибка|обязательное)", re.I)
 
 
