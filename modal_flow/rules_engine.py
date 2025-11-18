@@ -153,7 +153,7 @@ class RulesEngine:
                             if match:
                                 # Only substitute string parameters that contain placeholders
                                 params = params.copy() if isinstance(params, dict) else {}
-                                for k, v in list(params.items()):
+                                for k, v in params.items():
                                     if isinstance(v, str) and "{" in v and "}" in v:
                                         try:
                                             # Use match.groupdict() first for named groups
