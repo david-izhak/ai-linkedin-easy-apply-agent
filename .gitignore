@@ -26,9 +26,10 @@ logs/
 scripts/
 scripts2/
 generated_letters/
+tasks/
 *.db
-TODO.md
-tz1.md
+tasks/TODO.md
+tasks/tz1.md
 
 
 # Cursor
