@@ -113,6 +113,17 @@ async def _process_single_job(
         # Wait a bit for page to fully render, especially for dynamic content
         # This ensures "No longer accepting applications" text is loaded if present
         await asyncio.sleep(2)
+
+        # Check for external "Apply" button (not Easy Apply)
+        # This indicates the job requires applying on an external site, which is not supported
+        try:
+            apply_button = page.locator(selectors["apply_button"])
+            if await apply_button.count() > 0 and await apply_button.first.is_visible():
+                logger.info(f"Vacancy '{title}' has external 'Apply' button. Skipping.")
+                update_job_status(job_id, "skipped_external_apply", app_config.session.db_conn)
+                return False
+        except Exception as e:
+            logger.debug(f"Error checking for external Apply button: {e}")
         
         # Skip postings that are no longer open for applications.
         # Use multiple methods to find the text, as it might be in different states

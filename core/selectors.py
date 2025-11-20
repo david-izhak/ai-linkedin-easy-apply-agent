@@ -5,6 +5,7 @@ selectors = {
     "easy_apply_button_fallback_2": 'a[href*="/apply"]:has-text("Easy Apply")',  # Фолбек 2: по href
     "easy_apply_button_fallback_3": "div.jobs-apply-button--top-card button",  # Фолбек 3: старый селектор
     "easy_apply_button_by_data_view": "button[data-view-name='job-apply-button']",  # Кнопка Easy Apply по data-view-name
+    "apply_button": 'a[data-view-name="job-apply-button"]:has-text("Apply")',  # Кнопка Apply (внешняя подача)
 
     # Easy apply form
     "checkbox": ".jobs-easy-apply-modal input[type='checkbox']",
