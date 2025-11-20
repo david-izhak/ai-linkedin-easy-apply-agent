@@ -75,12 +75,24 @@ class SelectorRetryOverrideConfig(BaseSettings):
 class JobSearchConfig(BaseSettings):
     """Parameters for job searching."""
 
-    keywords: str = "Java Engineer" # "Software Engineer" "Backend Engineer"
+    keywords: str = "Software Engineer"  # "Software Engineer" "Backend Engineer"
     geo_id: str = "118490091"
     distance: str = "20"
-    job_search_period_seconds: int = 604800 # 30 days = 86400 / 7 days = 604800/ 4 days = 345600 / 2 days = 172800 / 1 day = 86400 / 3 days = 259200
+    # 30 days = 2592000
+    # 7 days = 604800
+    # 4 days = 345600
+    # 3 days = 259200
+    # 2 days = 172800
+    # 1 day = 86400
+    job_search_period_seconds: int = 86400
     sort_by: str = "DD"  # DD = Date Descending, R = Relevance
-    job_title_regex: str = r"(?i)^(?!.*(frontend|rust|laravel|php|junior|angular|driver|go(lang)|architect|qa|unity|technical|lead|teamlead|devops|salesforce|technology|llm|embedded|hardware|android|firmware|c\+\+|\.net|c#)).*?(automation|staff|sw|solution(s)|software|java|python|data|back\s*end|ai|chatbot|principal|full\s*stack|senior).*?.*?(developer|engineer).*$"
+    job_title_regex: str = (
+        r"(?i)^(?!.*(frontend|rust|laravel|php|junior|angular|driver|go(lang)|"
+        r"architect|qa|unity|technical|lead|teamlead|devops|salesforce|technology|"
+        r"llm|embedded|hardware|android|firmware|c\+\+|\.net|c#))"
+        r".*?(automation|staff|sw|solution(s)|software|java|python|data|back\s*end|"
+        r"ai|chatbot|principal|full\s*stack|senior).*?.*?(developer|engineer).*$"
+    )
     job_description_regex: str = r".*"
     job_description_languages: List[str] = ["en", "ru"]
 
@@ -132,14 +144,14 @@ class GeneralSettingsConfig(BaseSettings):
     single_page: bool = False
     browser_headless: bool = False
     max_applications_per_day: int = 30
-    wait_between_enrichments_ms: int = 10000
+    wait_between_enrichments_ms: int = 20000
     wait_between_submissions_ms: int = 30000
 
 
 class BotModeConfig(BaseSettings):
     """Configuration for the bot's operating mode."""
 
-    mode: str = Field("enrichment", validation_alias="BOT_MODE")
+    mode: str = Field("processing_submit", validation_alias="BOT_MODE")
     valid_modes: List[str] = [
         "discovery",
         "enrichment",
@@ -162,9 +174,9 @@ class BotModeConfig(BaseSettings):
 class JobLimitsConfig(BaseSettings):
     """Settings for limiting job processing (for testing/minimal runs)."""
 
-    max_jobs_to_discover: Optional[int] = 0
-    max_jobs_to_enrich: Optional[int] = 1
-    max_jobs_to_process: Optional[int] = 0
+    max_jobs_to_discover: Optional[int] = 200
+    max_jobs_to_enrich: Optional[int] = 70
+    max_jobs_to_process: Optional[int] = 20
 
 
 class PerformanceConfig(BaseSettings):
@@ -173,7 +185,7 @@ class PerformanceConfig(BaseSettings):
     networkidle_timeout: int = 60000  # ms
     max_wait_ms: int = 30000  # ms
     poll_interval_ms: int = 200  # ms
-    selector_timeout: int = 5000  # ms
+    selector_timeout: int = 20000  # ms
     max_noncritical_consecutive_errors: int = 5
 
 
@@ -263,8 +275,8 @@ class ModalFlowConfig(BaseSettings):
 class AppConfig(BaseSettings):
     """Root configuration class for the application."""
 
-    login: LoginConfig = LoginConfig()
-    session: SessionConfig = SessionConfig()
+    login: LoginConfig = LoginConfig()  # type: ignore
+    session: SessionConfig = SessionConfig()  # type: ignore
     logging: LoggingConfig = LoggingConfig()
     resilience: ResilienceConfig = ResilienceConfig()
     circuit_breaker: CircuitBreakerConfig = CircuitBreakerConfig()
@@ -273,9 +285,9 @@ class AppConfig(BaseSettings):
     )
     job_search: JobSearchConfig = JobSearchConfig()
     workplace: WorkplaceConfig = WorkplaceConfig()
-    form_data: FormDataConfig = FormDataConfig()
+    form_data: FormDataConfig = FormDataConfig()  # type: ignore
     general_settings: GeneralSettingsConfig = GeneralSettingsConfig()
-    bot_mode: BotModeConfig = BotModeConfig()
+    bot_mode: BotModeConfig = BotModeConfig()  # type: ignore
     job_limits: JobLimitsConfig = JobLimitsConfig()
     performance: PerformanceConfig = PerformanceConfig()
     diagnostics: DiagnosticsConfig = DiagnosticsConfig()
