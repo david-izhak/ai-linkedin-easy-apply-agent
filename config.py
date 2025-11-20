@@ -78,6 +78,7 @@ class JobSearchConfig(BaseSettings):
     keywords: str = "Software Engineer"  # "Software Engineer" "Backend Engineer"
     geo_id: str = "118490091"
     distance: str = "20"
+
     # 30 days = 2592000
     # 7 days = 604800
     # 4 days = 345600
@@ -85,6 +86,7 @@ class JobSearchConfig(BaseSettings):
     # 2 days = 172800
     # 1 day = 86400
     job_search_period_seconds: int = 86400
+
     sort_by: str = "DD"  # DD = Date Descending, R = Relevance
     job_title_regex: str = (
         r"(?i)^(?!.*(frontend|rust|laravel|php|junior|angular|driver|go(lang)|"
@@ -95,6 +97,11 @@ class JobSearchConfig(BaseSettings):
     )
     job_description_regex: str = r".*"
     job_description_languages: List[str] = ["en", "ru"]
+
+    # None
+    # "https://www.linkedin.com/jobs/collections/top-choice/"
+    # "https://www.linkedin.com/jobs/collections/top-applicant/"
+    custom_job_search_url: Optional[str] = "https://www.linkedin.com/jobs/collections/top-applicant/"
 
     model_config = SettingsConfigDict(validate_assignment=True)
 
@@ -151,7 +158,7 @@ class GeneralSettingsConfig(BaseSettings):
 class BotModeConfig(BaseSettings):
     """Configuration for the bot's operating mode."""
 
-    mode: str = Field("processing_submit", validation_alias="BOT_MODE")
+    mode: str = Field("discovery", validation_alias="BOT_MODE")
     valid_modes: List[str] = [
         "discovery",
         "enrichment",

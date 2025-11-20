@@ -182,38 +182,43 @@ async def fetch_job_links_user(
 
     logger.info("Navigating to job search page to begin discovery...")
     
-    # Calculate f_tpr from config
-    job_search_period = app_config.job_search.job_search_period_seconds
-    f_tpr = f"r{job_search_period}"
+    if app_config.job_search.custom_job_search_url:
+        initial_url = app_config.job_search.custom_job_search_url
+        logger.info(f"Using custom job search URL from config: {initial_url}")
+    else:
+        # Calculate f_tpr from config
+        job_search_period = app_config.job_search.job_search_period_seconds
+        f_tpr = f"r{job_search_period}"
 
-    # Mapping for workplace types from boolean config to LinkedIn filter values
-    # Note: LinkedIn uses numeric codes for these filters.
-    workplace_mapping = {
-        "1": app_config.workplace.on_site,
-        "2": app_config.workplace.remote,
-        "3": app_config.workplace.hybrid,
-    }
+        # Mapping for workplace types from boolean config to LinkedIn filter values
+        # Note: LinkedIn uses numeric codes for these filters.
+        workplace_mapping = {
+            "1": app_config.workplace.on_site,
+            "2": app_config.workplace.remote,
+            "3": app_config.workplace.hybrid,
+        }
 
-    # Construct the f_WT parameter string from the workplace_mapping
-    # e.g. "2" for remote, "1,2" for on_site and remote
-    f_wt = [
-        key
-        for key, val in workplace_mapping.items()
-        if val
-    ]
-    base_url = "https://www.linkedin.com/jobs/search/"
+        # Construct the f_WT parameter string from the workplace_mapping
+        # e.g. "2" for remote, "1,2" for on_site and remote
+        f_wt = [
+            key
+            for key, val in workplace_mapping.items()
+            if val
+        ]
+        base_url = "https://www.linkedin.com/jobs/search/"
 
-    initial_params = {
-        "keywords": app_config.job_search.keywords,
-        "geoId": app_config.job_search.geo_id,
-        "distance": app_config.job_search.distance,
-        "f_TPR": f_tpr,
-        "f_WT": ",".join(f_wt),
-        "f_AL": "true",
-        "sortBy": app_config.job_search.sort_by,
-    }
-    initial_url = f"{base_url}?{urlencode(initial_params)}&start=0"
-    logger.info(f"Navigating to initial search URL: {initial_url}")
+        initial_params = {
+            "keywords": app_config.job_search.keywords,
+            "geoId": app_config.job_search.geo_id,
+            "distance": app_config.job_search.distance,
+            "f_TPR": f_tpr,
+            "f_WT": ",".join(f_wt),
+            "f_AL": "true",
+            "sortBy": app_config.job_search.sort_by,
+        }
+        initial_url = f"{base_url}?{urlencode(initial_params)}&start=0"
+        logger.info(f"Navigating to initial search URL: {initial_url}")
+
     executor = get_resilience_executor(page)
     await executor.navigate(initial_url, wait_until="load")
 
