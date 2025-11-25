@@ -7,21 +7,18 @@ from typing import List, Sequence, Tuple
 from playwright.async_api import BrowserContext, Error as PlaywrightError, Page
 
 from config import config, AppConfig # Import the new config object
-from actions.fetch_jobs import fetch_job_details
-from core.database import get_jobs_to_enrich, save_enrichment_data, update_job_status
+from actions.fetch_jobs import fetch_job_details, fetch_job_page_only_details
+from core.database import (
+    get_jobs_to_enrich,
+    save_enrichment_data,
+    update_job_status,
+    get_company_details,
+)
 from core.resilience import get_resilience_executor
+from core.utils import random_wait_ms
 from diagnostics import DiagnosticOptions, DiagnosticContext, capture_on_failure
 
 logger = logging.getLogger(__name__)
-
-
-async def wait(time_ms: int) -> None:
-    """Asynchronously wait for the specified number of milliseconds.
-
-    Args:
-        time_ms: Duration to sleep in milliseconds.
-    """
-    await asyncio.sleep(time_ms / 1000.0)
 
 
 def _limit_jobs(jobs: Sequence[Tuple[int, str, str, str]], app_config: AppConfig) -> List[Tuple[int, str, str, str]]:
@@ -104,7 +101,15 @@ async def _save_error_snapshot(page: Page | None, job_id: int, link: str) -> Non
         logger.error(f"Failed to save HTML snapshot for job ID {job_id}. Error: {e}", exc_info=True)
 
 
-async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, title: str, app_config: AppConfig, noncritical_error_tracker: dict | None = None) -> bool:
+async def _enrich_single_job(
+    context: BrowserContext,
+    job_id: int,
+    link: str,
+    title: str,
+    company_name: str,
+    app_config: AppConfig,
+    noncritical_error_tracker: dict | None = None,
+) -> bool:
     """Enrich a single job by opening its page and fetching details.
 
     Uses unified retry mechanism with exponential backoff and cleanup between attempts.
@@ -114,6 +119,7 @@ async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, ti
         job_id: Database identifier of the job.
         link: URL to the job details page.
         title: Title of the job, used for logging.
+        company_name: Name of the company.
         app_config: The application configuration object.
         noncritical_error_tracker: Optional tracker for noncritical errors.
 
@@ -136,16 +142,37 @@ async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, ti
         
         # Create new page for this attempt
         page = await context.new_page()
-        
-        # Pass noncritical error tracker to allow systemic error detection downstream
-        details = await fetch_job_details(page, link, noncritical_error_tracker)  # type: ignore[arg-type]
-        
+
+        # Check for existing company data
+        company_details = get_company_details(
+            company_name, app_config.session.db_conn
+        )
+
+        if company_details:
+            logger.info(
+                f"Found existing details for company: {company_name}. Reusing them."
+            )
+            # Scrape only the job page
+            job_page_details = await fetch_job_page_only_details(page, link)
+            # Merge job details with existing company details
+            details = {**job_page_details, **company_details}
+        else:
+            logger.info(
+                f"No existing details for company: {company_name}. Performing a full scrape."
+            )
+            # Perform a full scrape
+            details = await fetch_job_details(
+                page, link, noncritical_error_tracker
+            )
+
         if not details:
             raise ValueError("No details were fetched for the job.")
-        
+
         logger.info(f"Successfully scraped details for job ID {job_id}.")
 
-        logger.debug(f"Attempting to save details for job ID {job_id} to the database.")
+        logger.debug(
+            f"Attempting to save details for job ID {job_id} to the database."
+        )
         save_enrichment_data(job_id, details, app_config.session.db_conn)
         logger.info(f"Successfully saved details for job ID {job_id}.")
         
@@ -242,7 +269,7 @@ async def _enrich_single_job(context: BrowserContext, job_id: int, link: str, ti
         await _safe_close_page(page)
         await _safe_close_page(temp_page)
         # Wait for a bit before processing the next job to avoid rate-limiting
-        await wait(app_config.general_settings.wait_between_enrichments_ms)
+        await random_wait_ms(app_config.general_settings.wait_between_enrichments_ms)
 
 
 async def run_enrichment_phase(
@@ -281,7 +308,13 @@ async def run_enrichment_phase(
         logger.info(f"Processing {index}/{total}: {title} (ID: {job_id})")
         
         success = await _enrich_single_job(
-            browser_context, job_id, link, title, app_config, noncritical_error_tracker
+            browser_context,
+            job_id,
+            link,
+            title,
+            company_name,
+            app_config,
+            noncritical_error_tracker,
         )
         
         if success:

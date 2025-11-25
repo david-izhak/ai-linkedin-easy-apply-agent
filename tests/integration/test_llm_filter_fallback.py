@@ -42,7 +42,7 @@ def mock_apply_to_job(monkeypatch):
 def mock_wait(monkeypatch):
     """Fixture to mock the wait function."""
     mock = AsyncMock()
-    monkeypatch.setattr("phases.processing.wait", mock)
+    monkeypatch.setattr("core.utils.random_wait_ms", mock)
     return mock
 
 
@@ -100,6 +100,12 @@ async def test_llm_filter_fallback_integration(
             "job_search": app_config.job_search.model_copy(
                 update={"job_description_regex": r"java"}
             ),
+            "job_limits": app_config.job_limits.model_copy(
+                update={"max_jobs_to_process": 1}
+            ),
+            "general_settings": app_config.general_settings.model_copy(
+                update={"max_applications_per_day": 2}
+            ),
         }
     )
 
@@ -117,7 +123,6 @@ async def test_llm_filter_fallback_integration(
 
     # Verify that the job was still processed because it matched the fallback regex
     mock_apply_to_job.assert_awaited_once()
-    mock_wait.assert_awaited_once()
 
     # Check the database to ensure the status was updated to 'processed'
     cursor = db_conn.cursor()

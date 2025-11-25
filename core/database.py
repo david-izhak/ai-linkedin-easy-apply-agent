@@ -349,3 +349,40 @@ def get_existing_vacancy_ids(
     )
     rows = cursor.fetchall()
     return {row[0] for row in rows}
+
+
+def get_company_details(
+    company_name: str, db_conn: sqlite3.Connection
+) -> dict[str, any] | None:
+    """
+    Fetches company details from the database if they have been previously scraped.
+    """
+    cursor = db_conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            company_overview,
+            company_website,
+            company_industry,
+            company_size,
+            company_headquarters,
+            company_specialties,
+            company_founded
+        FROM vacancies
+        WHERE company = ? AND company_overview IS NOT NULL
+        LIMIT 1
+        """,
+        (company_name,),
+    )
+    row = cursor.fetchone()
+    if row:
+        return {
+            "company_overview": row[0],
+            "company_website": row[1],
+            "company_industry": row[2],
+            "company_size": row[3],
+            "company_headquarters": row[4],
+            "company_specialties": row[5],
+            "company_founded": row[6],
+        }
+    return None

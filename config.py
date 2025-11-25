@@ -75,7 +75,7 @@ class SelectorRetryOverrideConfig(BaseSettings):
 class JobSearchConfig(BaseSettings):
     """Parameters for job searching."""
 
-    keywords: str = "Software Engineer"  # "Software Engineer" "Backend Engineer"
+    keywords: str = "Java Programmer"  # "Software Engineer" "Backend Engineer" "Java Developer" "Java Programmer"
     geo_id: str = "118490091"
     distance: str = "20"
 
@@ -85,7 +85,7 @@ class JobSearchConfig(BaseSettings):
     # 3 days = 259200
     # 2 days = 172800
     # 1 day = 86400
-    job_search_period_seconds: int = 86400
+    job_search_period_seconds: int = 259200
 
     sort_by: str = "DD"  # DD = Date Descending, R = Relevance
     job_title_regex: str = (
@@ -101,7 +101,7 @@ class JobSearchConfig(BaseSettings):
     # None
     # "https://www.linkedin.com/jobs/collections/top-choice/"
     # "https://www.linkedin.com/jobs/collections/top-applicant/"
-    custom_job_search_url: Optional[str] = "https://www.linkedin.com/jobs/collections/top-applicant/"
+    custom_job_search_url: Optional[str] = None
 
     model_config = SettingsConfigDict(validate_assignment=True)
 
@@ -158,7 +158,7 @@ class GeneralSettingsConfig(BaseSettings):
 class BotModeConfig(BaseSettings):
     """Configuration for the bot's operating mode."""
 
-    mode: str = Field("discovery", validation_alias="BOT_MODE")
+    mode: str = Field("processing_submit", validation_alias="BOT_MODE")
     valid_modes: List[str] = [
         "discovery",
         "enrichment",
@@ -182,8 +182,8 @@ class JobLimitsConfig(BaseSettings):
     """Settings for limiting job processing (for testing/minimal runs)."""
 
     max_jobs_to_discover: Optional[int] = 200
-    max_jobs_to_enrich: Optional[int] = 70
-    max_jobs_to_process: Optional[int] = 20
+    max_jobs_to_enrich: Optional[int] = 50
+    max_jobs_to_process: Optional[int] = 2
 
 
 class PerformanceConfig(BaseSettings):
@@ -194,6 +194,16 @@ class PerformanceConfig(BaseSettings):
     poll_interval_ms: int = 200  # ms
     selector_timeout: int = 20000  # ms
     max_noncritical_consecutive_errors: int = 5
+
+
+class PlaywrightConfig(BaseSettings):
+    """Configuration for Playwright browser context."""
+
+    # viewport: Dict[str, int] = {"width": 3840, "height": 2160}
+    viewport: Dict[str, int] = {}
+    locale: str = "en-IL"
+    timezone_id: str = "Asia/Jerusalem"
+    user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
 
 
 class DiagnosticsConfig(BaseSettings):
@@ -298,6 +308,7 @@ class AppConfig(BaseSettings):
     job_limits: JobLimitsConfig = JobLimitsConfig()
     performance: PerformanceConfig = PerformanceConfig()
     diagnostics: DiagnosticsConfig = DiagnosticsConfig()
+    playwright: PlaywrightConfig = PlaywrightConfig()
     llm: LLMSettings = LLMSettings()
     modal_flow: ModalFlowConfig = ModalFlowConfig()
 

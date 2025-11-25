@@ -120,8 +120,13 @@ async def main():
             context = await p.chromium.launch_persistent_context(
                 str(config.session.user_data_dir),
                 headless=config.general_settings.browser_headless,
+                user_agent=config.playwright.user_agent,
+                viewport=config.playwright.viewport if config.playwright.viewport else None,
+                locale=config.playwright.locale,
+                timezone_id=config.playwright.timezone_id,
                 ignore_https_errors=True,
-                args=["--disable-setuid-sandbox", "--no-sandbox"],
+                no_viewport=True,
+                args=["--disable-setuid-sandbox", "--no-sandbox", "--disable-blink-features=AutomationControlled", '--start-maximized'],
             )
             page = context.pages[0] if context.pages else await context.new_page()
             await login(page=page)

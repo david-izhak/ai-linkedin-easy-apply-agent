@@ -350,7 +350,14 @@ class TestScrapeCompanyAboutPage:
         # Mock extract_text_with_retry to return overview text
         mock_executor_instance.extract_text_with_retry.return_value = "Company overview here"
 
-        result = await _scrape_company_about_page(mock_page, company_name)
+        result = await _scrape_company_about_page(
+            mock_page, company_name, "https://www.linkedin.com/jobs/search/"
+        )
+
+        # Assertions
+        mock_executor_instance.navigate.assert_called_with(
+            company_name, wait_until="load", referer="https://www.linkedin.com/jobs/search/"
+        )
 
         assert result["company_overview"] == "Company overview here"
         assert result["company_website"] == "https://company.com"
@@ -404,11 +411,15 @@ class TestFetchJobDetails:
 
         # Now uses executor.navigate instead of page.goto
         mock_executor_instance.navigate.assert_called_once_with(
-            f"https://www.linkedin.com{job_link}", wait_until="load"
+            f"https://www.linkedin.com{job_link}",
+            wait_until="load",
+            referer="https://www.linkedin.com/jobs/search/",
         )
         mock_scrape_job_page_details.assert_called_once_with(mock_page, f"https://www.linkedin.com{job_link}")
         mock_scrape_company_about_page.assert_called_once_with(
-            mock_page, "https://www.linkedin.com/company/test-company/about/"
+            mock_page,
+            "https://www.linkedin.com/company/test-company/about/",
+            referer=f"https://www.linkedin.com{job_link}",
         )
 
         # Check that all details are merged correctly
@@ -455,9 +466,12 @@ class TestFetchJobDetails:
 
         # Now uses executor.navigate instead of page.goto
         mock_executor_instance.navigate.assert_called_once_with(
-            f"https://www.linkedin.com{job_link}", wait_until="load"
+            f"https://www.linkedin.com{job_link}",
+            wait_until="load",
+            referer="https://www.linkedin.com/jobs/search/",
         )
-        mock_scrape_job_page_details.assert_called_once_with(mock_page, f"https://www.linkedin.com{job_link}")
+
+        mock_scrape_job_page_details.assert_called_once()
         mock_scrape_company_about_page.assert_not_called()
 
         # Should only have job page details
@@ -495,7 +509,9 @@ class TestFetchJobDetails:
 
         # Now uses executor.navigate instead of page.goto
         mock_executor_instance.navigate.assert_called_once_with(
-            f"https://www.linkedin.com{job_link}", wait_until="load"
+            f"https://www.linkedin.com{job_link}",
+            wait_until="load",
+            referer="https://www.linkedin.com/jobs/search/",
         )
         mock_scrape_job_page_details.assert_called_once_with(mock_page, f"https://www.linkedin.com{job_link}")
         mock_scrape_company_about_page.assert_not_called()

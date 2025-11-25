@@ -1,5 +1,8 @@
+import re
 from playwright.async_api import Page, ElementHandle
+import logging
 
+logger = logging.getLogger(__name__)
 
 async def change_text_input(
     container: Page | ElementHandle, selector: str, value: str
@@ -25,12 +28,17 @@ async def change_text_input(
             )
         input_element = container  # mypy now knows container is an ElementHandle
 
-    # Get the current value of the input
+    # Получаем текущее значение
     previous_value = await input_element.input_value()
+    logger.debug("Previous value: %s", previous_value)
 
-    # Only change the value if it's different
-    if previous_value != value:
-        # Click the input 3 times to select all text (similar to Ctrl+A)
-        await input_element.click(click_count=3)
-        # Type the new value
-        await input_element.type(value)
+    # Нормализация для корректного сравнения (убираем пробелы, тире, плюсы для проверки)
+    # Если вы уверены, что форматы идентичны, можно оставить простое сравнение
+    def normalize(text):
+        return re.sub(r'\D', '', text)
+
+    # Проверяем, нужно ли менять значение
+    if normalize(previous_value) != normalize(value):
+        # Используем fill вместо type.
+        # fill вызывает событие input, change и предварительно очищает поле.
+        await input_element.fill(value)

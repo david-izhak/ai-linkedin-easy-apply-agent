@@ -79,11 +79,12 @@ class TestRunEnrichmentPhase:
         mock_get_jobs_to_enrich.assert_called_once()
         assert mock_enrich_single_job.call_count == 2
         from unittest.mock import ANY
+
         mock_enrich_single_job.assert_any_call(
-            mock_browser_context, 1, "/job1", "Title1", mock_app_config, ANY
+            mock_browser_context, 1, "/job1", "Title1", "Company1", mock_app_config, ANY
         )
         mock_enrich_single_job.assert_any_call(
-            mock_browser_context, 2, "/job2", "Title2", mock_app_config, ANY
+            mock_browser_context, 2, "/job2", "Title2", "Company2", mock_app_config, ANY
         )
 
 
@@ -153,11 +154,24 @@ class TestRunEnrichmentPhase:
         mock_get_jobs_to_enrich.return_value = jobs
 
         # Define a fake _enrich_single_job that increments tracker and returns False (to also exercise consecutive_errors path)
-        async def fake_enrich(context, job_id, link, title, app_config, noncritical_error_tracker):
-            noncritical_error_tracker["company_link_query"] = noncritical_error_tracker.get("company_link_query", 0) + 1
+        async def fake_enrich(
+            context,
+            job_id,
+            link,
+            title,
+            company_name,
+            app_config,
+            noncritical_error_tracker,
+        ):
+            noncritical_error_tracker["company_link_query"] = (
+                noncritical_error_tracker.get("company_link_query", 0) + 1
+            )
             return False
 
-        with patch("phases.enrichment._enrich_single_job", new=AsyncMock(side_effect=fake_enrich)):
+        with patch(
+            "phases.enrichment._enrich_single_job",
+            new=AsyncMock(side_effect=fake_enrich),
+        ) as mock_job:
             await run_enrichment_phase(mock_app_config, mock_browser_context)
 
         # Should stop after reaching threshold: 3 calls only
@@ -180,7 +194,15 @@ class TestRunEnrichmentPhase:
 
         call_counter = {"calls": 0}
 
-        async def fake_enrich(context, job_id, link, title, app_config, noncritical_error_tracker):
+        async def fake_enrich(
+            context,
+            job_id,
+            link,
+            title,
+            company_name,
+            app_config,
+            noncritical_error_tracker,
+        ):
             call_counter["calls"] += 1
             # First two calls increment noncritical, third succeeds (reset), then increments again twice -> should finish all 4
             if call_counter["calls"] in (1, 2):

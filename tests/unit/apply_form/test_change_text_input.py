@@ -18,27 +18,24 @@ class TestChangeTextInput:
         mock_container = AsyncMock()
         mock_element = AsyncMock()
         mock_container.query_selector.return_value = mock_element
-        mock_element.input_value.return_value = "old_value"
+        mock_element.input_value.return_value = "old_value_1"
 
-        await change_text_input(mock_container, "input#test", "new_value")
+        await change_text_input(mock_container, "input#test", "new_value_2")
 
         mock_container.query_selector.assert_called_once_with("input#test")
-        mock_element.click.assert_called_once_with(click_count=3)
-        mock_element.type.assert_called_once_with("new_value")
+        mock_element.fill.assert_called_once_with("new_value_2")
 
     @pytest.mark.asyncio
     async def test_change_text_input_without_selector(self):
         """Test changing text input when container is the element itself."""
         # Create a proper ElementHandle mock
         mock_element = MagicMock(spec=ElementHandle)
-        mock_element.input_value = AsyncMock(return_value="old_value")
-        mock_element.click = AsyncMock()
-        mock_element.type = AsyncMock()
+        mock_element.input_value = AsyncMock(return_value="old_value_1")
+        mock_element.fill = AsyncMock()
 
-        await change_text_input(mock_element, "", "new_value")
+        await change_text_input(mock_element, "", "new_value_2")
 
-        mock_element.click.assert_called_once_with(click_count=3)
-        mock_element.type.assert_called_once_with("new_value")
+        mock_element.fill.assert_called_once_with("new_value_2")
 
     @pytest.mark.asyncio
     async def test_change_text_input_value_different(self):
@@ -51,9 +48,8 @@ class TestChangeTextInput:
         await change_text_input(mock_container, "input#test", "same_value")
 
         mock_container.query_selector.assert_called_once_with("input#test")
-        # Should not click or type since values are the same
-        mock_element.click.assert_not_called()
-        mock_element.type.assert_not_called()
+        # Should not fill since values are the same
+        mock_element.fill.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_change_text_input_element_not_found(self):

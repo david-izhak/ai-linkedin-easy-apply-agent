@@ -26,10 +26,12 @@ from tenacity import (
     wait_random
 )
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError, Locator, Error as PlaywrightError
+from python_ghost_cursor.playwright_async import create_cursor
 
 from core.metrics import get_metrics_collector
 from core.logger import get_structured_logger, bind_context
 from config import config, AppConfig # Import the new config object
+from core.utils import random_sleep
 
 # Type variables for generic function signatures
 T = TypeVar('T')
@@ -216,6 +218,7 @@ class SelectorExecutor:
         self.logger = get_structured_logger(__name__)
         self.metrics_collector = get_metrics_collector()
         self.circuit_breaker_manager = get_circuit_breaker_manager()
+        self.cursor = create_cursor(page)
     
     async def _execute_with_resilience(
         self,
@@ -444,7 +447,7 @@ class SelectorExecutor:
             
         async def operation():
             await self.page.wait_for_selector(css_selector, timeout=timeout)
-            await self.page.click(css_selector)
+            await self.cursor.click(css_selector)
             
         return await self._execute_with_resilience(
             selector_name=selector_name,
@@ -480,6 +483,47 @@ class SelectorExecutor:
         async def operation():
             await self.page.wait_for_selector(css_selector, timeout=timeout)
             await self.page.fill(css_selector, value)
+            
+        return await self._execute_with_resilience(
+            selector_name=selector_name,
+            operation=operation,
+            context=context
+        )
+    
+    async def fill_human(
+        self, 
+        selector_name: str, 
+        value: str,
+        css_selector: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> None:
+        """
+        Fill a form field with human-like typing simulation.
+        
+        Types text character-by-character with random delays to mimic human behavior
+        and avoid bot detection systems.
+        
+        Args:
+            selector_name: Name of the selector (for logs and metrics)
+            value: Value to fill in the form field
+            css_selector: CSS selector string (defaults to selector name if not provided)
+            context: Additional context for logging
+            timeout: Timeout in milliseconds for wait_for_selector. Defaults to config.performance.selector_timeout.
+        """
+        from core.utils import simulate_human_typing
+        
+        if css_selector is None:
+            from core.selectors import selectors
+            css_selector = selectors.get(selector_name, selector_name)
+        
+        if timeout is None:
+            timeout = self.app_config.performance.selector_timeout
+            
+        async def operation():
+            element = await self.page.wait_for_selector(css_selector, timeout=timeout)
+            if element:
+                await simulate_human_typing(element, value, clear_first=True)
             
         return await self._execute_with_resilience(
             selector_name=selector_name,
@@ -797,6 +841,19 @@ class ResilienceExecutor:
             selector_name, value, css_selector, context, timeout
         )
     
+    async def fill_human(
+        self, 
+        selector_name: str, 
+        value: str,
+        css_selector: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+        timeout: Optional[int] = None
+    ) -> None:
+        """Fill a form field with human-like typing simulation."""
+        return await self.selector_executor.fill_human(
+            selector_name, value, css_selector, context, timeout
+        )
+    
     async def check(
         self, 
         selector_name: str, 
@@ -880,7 +937,8 @@ class ResilienceExecutor:
         url: str,
         context: Optional[Dict[str, Any]] = None,
         wait_until: str = "load",
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        referer: Optional[str] = None
     ) -> None:
         """
         Navigate to a URL with retry and circuit breaker protection.
@@ -890,6 +948,7 @@ class ResilienceExecutor:
             context: Additional context for logging
             wait_until: Navigation wait condition (load, domcontentloaded, networkidle)
             timeout: Timeout in milliseconds. Defaults to config.performance.selector_timeout.
+            referer: Referer header value. Defaults to None.
         """
         if timeout is None:
             timeout = self.app_config.performance.selector_timeout
@@ -902,12 +961,12 @@ class ResilienceExecutor:
         )
         
         async def nav_operation():
-            await self.page.goto(url, wait_until=wait_until, timeout=timeout)
+            await self.page.goto(url, wait_until=wait_until, timeout=timeout, referer=referer)
         
         return await self.selector_executor.execute_operation(
             selector_name="navigation",
             operation=nav_operation,
-            context={**(context or {}), "url": url, "wait_until": wait_until}
+            context={**(context or {}), "url": url, "wait_until": wait_until, "referer": referer}
         )
     
     async def extract_text_with_retry(
@@ -954,11 +1013,11 @@ class ResilienceExecutor:
                     op_logger.debug(
                         f"{label} locator not ready for scrolling (delay {delay}): {scroll_error}"
                     )
-                    await asyncio.sleep(0.5)
+                    await random_sleep(0.5)
                     continue
                 
                 # Wait for the specified delay
-                await asyncio.sleep(delay)
+                await random_sleep(delay)
                 
                 # Try to extract text
                 try:
@@ -1074,7 +1133,7 @@ class ResilienceExecutor:
                                 f"Cleanup failed before retry: {cleanup_error}"
                             )
                     
-                    await asyncio.sleep(wait_seconds)
+                    await random_sleep(wait_seconds)
                 else:
                     # All attempts exhausted
                     op_logger.error(

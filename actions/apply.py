@@ -4,6 +4,7 @@ import re
 import asyncio
 
 from core.selectors import selectors
+from core.utils import random_sleep
 from core.form_filler import (
     FormFillCoordinator,
     JobApplicationContext,
@@ -93,7 +94,7 @@ async def _select_easy_apply_element(locator: Locator) -> Locator:
 async def _wait_for_easy_apply_modal(page: Page) -> None:
     """Waits for the Easy Apply modal window to appear using multiple strategies."""
     # Wait a bit for the modal to start appearing (same as test script)
-    await asyncio.sleep(2)
+    await random_sleep(2)
 
     logger.info("Waiting for Easy Apply modal window to appear...")
 
@@ -106,7 +107,7 @@ async def _wait_for_easy_apply_modal(page: Page) -> None:
                 timeout=5000
             )
             logger.info("Easy Apply modal window appeared (detected by: .jobs-easy-apply-modal)")
-            await asyncio.sleep(0.5)
+            await random_sleep(0.5)
             return
         except PlaywrightTimeoutError:
             logger.debug("Modal class not found, trying get_by_role('dialog')...")
@@ -117,7 +118,7 @@ async def _wait_for_easy_apply_modal(page: Page) -> None:
             await dialogs.first.wait_for(state="visible", timeout=5000)
             dialog_count = await dialogs.count()
             logger.info(f"Easy Apply modal window appeared (found {dialog_count} dialog(s) using get_by_role)")
-            await asyncio.sleep(0.5)
+            await random_sleep(0.5)
             return
         except PlaywrightTimeoutError:
             logger.debug("Dialog not found with get_by_role, trying generic selector...")
@@ -130,7 +131,7 @@ async def _wait_for_easy_apply_modal(page: Page) -> None:
                 timeout=3000
             )
             logger.info("Easy Apply modal window appeared (detected by: [role='dialog'])")
-            await asyncio.sleep(0.5)
+            await random_sleep(0.5)
             return
         except PlaywrightTimeoutError:
             pass

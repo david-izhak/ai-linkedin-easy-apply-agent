@@ -22,6 +22,7 @@ def mock_get_resilience_executor():
         mock_executor_instance.navigate = AsyncMock()
         mock_executor_instance.wait_for_selector = AsyncMock()
         mock_executor_instance.fill = AsyncMock()
+        mock_executor_instance.fill_human = AsyncMock()
         mock_executor_instance.click = AsyncMock()
         mock_executor_instance.query_selector_with_retry = AsyncMock()
         yield mock
@@ -55,7 +56,9 @@ class TestLogin:
 
         # Should only navigate to feed initially (now uses executor.navigate)
         mock_executor_instance.navigate.assert_called_once_with(
-            "https://www.linkedin.com/feed/", wait_until="load"
+            "https://www.linkedin.com/feed/",
+            wait_until="load",
+            referer="https://www.linkedin.com/home/?originalSubdomain=il",
         )
         # Should not proceed with login steps
         mock_executor_instance.fill.assert_not_called()
@@ -102,9 +105,9 @@ class TestLogin:
         login_calls = [call for call in mock_executor_instance.navigate.call_args_list 
                        if call[0][0] == "https://www.linkedin.com/login"]
         assert len(login_calls) >= 1
-        # Should fill in credentials
-        mock_executor_instance.fill.assert_any_call("email_input", "test@example.com", css_selector=ANY)
-        mock_executor_instance.fill.assert_any_call("password_input", "password123", css_selector=ANY)
+        # Should fill in credentials with human-like typing
+        mock_executor_instance.fill_human.assert_any_call("email_input", "test@example.com", css_selector=ANY)
+        mock_executor_instance.fill_human.assert_any_call("password_input", "password123", css_selector=ANY)
         # Should click submit
         assert mock_executor_instance.click.call_count >= 1
         # Should not call ask_user since no captcha is detected

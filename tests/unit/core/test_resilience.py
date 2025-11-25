@@ -142,6 +142,10 @@ def selector_executor(mock_page, mock_metrics_collector):
                     page=mock_page,
                     app_config=MockAppConfig()
                 )
+                
+                # Mock the cursor's click method to avoid issues with ghost-cursor in tests
+                executor.cursor.click = AsyncMock()
+                
                 yield executor
 
 
@@ -216,7 +220,7 @@ class TestSelectorExecutor:
         
         # Verify page methods were called
         mock_page.wait_for_selector.assert_called_once()
-        mock_page.click.assert_called_once()
+        selector_executor.cursor.click.assert_called_once()
         
     async def test_click_with_retry(self, selector_executor, mock_page):
         """Test click operation with retry on failure."""
@@ -238,7 +242,7 @@ class TestSelectorExecutor:
         # Verify it was called 3 times (2 failures + 1 success)
         assert fail_count == 3
         # Verify click was called once (on the success)
-        mock_page.click.assert_called_once()
+        selector_executor.cursor.click.assert_called_once()
         
     async def test_click_max_retries_exceeded(self, selector_executor, mock_page):
         """Test click operation when max retries are exceeded."""
@@ -250,7 +254,7 @@ class TestSelectorExecutor:
             await selector_executor.click("test_selector")
         
         # Verify page.click was never called
-        mock_page.click.assert_not_called()
+        selector_executor.cursor.click.assert_not_called()
     
     async def test_circuit_breaker_open(self, selector_executor, mock_page):
         """Test operation when circuit breaker is open."""

@@ -19,7 +19,7 @@ async def login(page: Page) -> None:
     """
     logger.info("Checking for active LinkedIn session...")
     executor = get_resilience_executor(page)
-    await executor.navigate("https://www.linkedin.com/feed/", wait_until="load")
+    await executor.navigate("https://www.linkedin.com/feed/", wait_until="load", referer="https://www.linkedin.com/home/?originalSubdomain=il")
 
     # Wait for either login indicator (authenticated) or login form (not authenticated)
     # This is much faster than wait_for_load_state("networkidle")
@@ -43,14 +43,14 @@ async def login(page: Page) -> None:
     logger.info("Did not detect active session; proceeding to explicit login flow.")
 
     logger.debug("Navigating to login page.")
-    await executor.navigate("https://www.linkedin.com/login", wait_until="load")
+    await executor.navigate("https://www.linkedin.com/login", wait_until="load", referer="https://www.google.com/")
 
     logger.debug("Entering login credentials.")
     # Ensure inputs are present and visible before interacting
     await executor.wait_for_selector("email_input", selectors["email_input"], timeout=config.performance.selector_timeout)
     await executor.wait_for_selector("password_input", selectors["password_input"], timeout=config.performance.selector_timeout)
-    await executor.fill("email_input", config.login.email, css_selector=selectors["email_input"])
-    await executor.fill("password_input", config.login.password, css_selector=selectors["password_input"])
+    await executor.fill_human("email_input", config.login.email, css_selector=selectors["email_input"])
+    await executor.fill_human("password_input", config.login.password, css_selector=selectors["password_input"])
 
     logger.debug("Clicking login submit button.")
     await executor.click("login_submit", css_selector=selectors["login_submit"])

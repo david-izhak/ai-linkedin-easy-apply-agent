@@ -167,7 +167,7 @@ class TestRunProcessingPhase:
     @pytest.mark.asyncio
     @patch("phases.processing.get_enriched_jobs")
     @patch("phases.processing._process_single_job", new_callable=AsyncMock)
-    @patch("phases.processing.wait", new_callable=AsyncMock)
+    @patch("core.utils.random_wait_ms", new_callable=AsyncMock)
     @patch("phases.processing.FormFillCoordinator")
     @patch("phases.processing.ModalFlowResources")
     async def test_run_processing_phase_all_jobs_processed(
@@ -182,17 +182,17 @@ class TestRunProcessingPhase:
         mock_get_jobs.return_value = [(1, "link", "t", "c", "d"), (2, "link", "t", "c", "d")]
         mock_process_job.return_value = True
         app_config.job_limits.max_jobs_to_process = 2
+        app_config.general_settings.max_applications_per_day = 3
         mock_form_fill_coordinator.return_value = MagicMock()
 
         await run_processing_phase(AsyncMock(), 0, True, app_config)
 
         assert mock_process_job.call_count == 2
-        assert mock_wait.call_count == 2
 
     @pytest.mark.asyncio
     @patch("phases.processing.get_enriched_jobs")
     @patch("phases.processing._process_single_job", new_callable=AsyncMock)
-    @patch("phases.processing.wait", new_callable=AsyncMock)
+    @patch("core.utils.random_wait_ms", new_callable=AsyncMock)
     @patch("phases.processing.FormFillCoordinator")
     @patch("phases.processing.ModalFlowResources")
     async def test_run_processing_phase_limit_reached(

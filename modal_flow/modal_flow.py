@@ -4,7 +4,7 @@ ModalFlowRunner: Main orchestrator for filling LinkedIn Easy Apply modal forms.
 This module implements the core logic for parsing modals, applying rules,
 resolving fields, and controlling the flow between multiple modal steps.
 """
-
+import random
 import re
 import logging
 from pathlib import Path
@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from playwright.async_api import Page, Locator, expect
 
 from core.selectors import selectors
+from core.utils import simulate_human_typing
 from modal_flow.profile_schema import CandidateProfile
 from modal_flow.rules_store import RuleStore
 from modal_flow.normalizer import QuestionNormalizer
@@ -844,11 +845,10 @@ class ModalFlowRunner:
         search_text = str(initial_decision).strip()
         self.logger.debug(f"Initial decision for '{question}': '{search_text}'")
         
-        # Step 2: Clear and fill the combobox to trigger listbox
+        # Step 2: Clear and fill the combobox to trigger listbox (using human-like typing)
         try:
             await combo.click(force=True)
-            await combo.clear()
-            await combo.fill(search_text)
+            await simulate_human_typing(combo, search_text, clear_first=True)
             
             # Small delay to allow the listbox to appear
             await self.page.wait_for_timeout(300)
@@ -1048,7 +1048,7 @@ class ModalFlowRunner:
             try:
                 current_value = await combo.input_value()
                 if not current_value or current_value != search_text:
-                    await combo.fill(search_text)
+                    await simulate_human_typing(combo, search_text, clear_first=True)
                     self.logger.debug(f"Filled combobox '{question}' as textbox with '{search_text}'")
             except Exception as fill_error:
                 self.logger.error(f"Failed to fill combobox '{question}' as textbox: {fill_error}")
@@ -1144,6 +1144,15 @@ class ModalFlowRunner:
             
             self.logger.debug(f"Number input '{question}': decision={decision}, final_value={value}")
             
+            # Normalize and compare values before typing
+            current_value = await num_input.input_value()
+            normalized_current = re.sub(r'\D', '', current_value)
+            normalized_new = re.sub(r'\D', '', str(value))
+            
+            if normalized_current and normalized_new and normalized_current == normalized_new:
+                self.logger.info(f"Skipping number input '{question}' as it already has the correct value.")
+                continue
+
             # Convert to integer if possible
             if isinstance(value, (int, float)):
                 value = str(int(value))
@@ -1152,7 +1161,8 @@ class ModalFlowRunner:
             else:
                 value = "0"
             
-            await num_input.fill(value)
+            # Use human-like typing simulation
+            await simulate_human_typing(num_input, value, clear_first=True)
     
     async def _handle_textboxes(self, modal: Locator, is_same_dialog: bool = False):
         """Handle text input fields."""
@@ -1210,11 +1220,27 @@ class ModalFlowRunner:
             value = decision if decision else ("N/A" if field_type == "text" else "0")
             
             self.logger.debug(f"Textbox '{question}': decision={decision}, final_value={value}")
-            
+
+            # Normalize and compare values before typing
+            try:
+                current_value = await tb.input_value()
+                # For text fields that might be numeric (like phone), normalize and compare
+                if field_type == "number" or "phone" in question.lower():
+                    normalized_current = re.sub(r'\D', '', current_value)
+                    normalized_new = re.sub(r'\D', '', str(value))
+                    if normalized_current and normalized_new and normalized_current == normalized_new:
+                        self.logger.info(f"Skipping textbox '{question}' as it already has the correct numeric value.")
+                        continue
+                elif current_value == str(value):
+                    self.logger.info(f"Skipping textbox '{question}' as it already has the correct value.")
+                    continue
+            except Exception as e:
+                self.logger.debug(f"Could not get input value for comparison: {e}")
+
             if field_type == "number":
                 value = str(int(value) if str(value).isdigit() else 0)
-            
-            await tb.fill(str(value))
+            # Use human-like typing simulation, ensuring field is cleared first
+            await simulate_human_typing(tb, str(value), clear_first=True)
     
     async def _infer_group_question(self, any_radio: Locator) -> str:
         """
@@ -1931,7 +1957,13 @@ class ModalFlowRunner:
         await expect(button).to_be_enabled()
         
         # Click
-        await button.click()
+        bounding_box = await button.bounding_box()
+        if bounding_box:
+            x = bounding_box['x'] + bounding_box['width'] / 2 + random.randint(-5, 5)
+            y = bounding_box['y'] + bounding_box['height'] / 2 + random.randint(-5, 5)
+            await self.page.mouse.click(x, y)
+        else:
+            await button.click()
         
         # Wait for button to become disabled or detached (prevents double-click)
         try:

@@ -12,7 +12,7 @@ from actions.apply import apply_to_job
 from core.database import get_enriched_jobs, get_error_jobs, update_job_status
 from core.selectors import selectors
 from llm.vacancy_filter import is_vacancy_suitable
-from core.utils import construct_full_url
+from core.utils import construct_full_url, random_sleep, random_wait_ms
 from core.form_filler import (
     FormFillCoordinator,
     ModalFlowResources,
@@ -112,7 +112,7 @@ async def _process_single_job(
         
         # Wait a bit for page to fully render, especially for dynamic content
         # This ensures "No longer accepting applications" text is loaded if present
-        await asyncio.sleep(2)
+        await random_sleep(2)
 
         # Check for external "Apply" button (not Easy Apply)
         # This indicates the job requires applying on an external site, which is not supported
@@ -226,7 +226,7 @@ async def _process_single_job(
                 if is_disabled:
                     # Try to find the "No longer accepting applications" message again
                     # Sometimes it appears after button is rendered
-                    await asyncio.sleep(1)
+                    await random_sleep(1)
                     
                     # Use the same multi-method approach
                     found_closed = False
@@ -425,7 +425,7 @@ async def run_processing_phase(
                     )
                     break
             
-            await wait(app_config.general_settings.wait_between_submissions_ms)
+            await random_wait_ms(app_config.general_settings.wait_between_submissions_ms)
     else:
         logger.info("No enriched jobs to process.")
     
@@ -459,7 +459,7 @@ async def run_processing_phase(
                         )
                         break
                 
-                await wait(app_config.general_settings.wait_between_submissions_ms)
+                await random_wait_ms(app_config.general_settings.wait_between_submissions_ms)
         else:
             logger.info("No error jobs to retry.")
     else:
@@ -467,8 +467,3 @@ async def run_processing_phase(
 
     logger.info("--- Finished Processing Phase ---")
     await context.close()
-
-
-async def wait(time_ms: int) -> None:
-    """Asynchronously wait for the specified number of milliseconds."""
-    await asyncio.sleep(time_ms / 1000.0)

@@ -1,10 +1,8 @@
-import time
-import json
-import hashlib
 import asyncio
 import logging
-from typing import Optional
-from playwright.async_api import Page, ElementHandle
+import random
+from typing import Optional, Union
+from playwright.async_api import Page, ElementHandle, Locator
 from urllib.parse import urljoin
 
 logger = logging.getLogger(__name__)
@@ -156,3 +154,65 @@ async def wait_for_any_selector(
 #             continue
 #
 #     return None
+
+
+async def simulate_human_typing(
+    element: Union[Locator, ElementHandle],
+    text: str,
+    clear_first: bool = True,
+    pre_delay_range: tuple[int, int] = (200, 800),
+    char_delay_range: tuple[int, int] = (50, 150),
+) -> None:
+    """
+    Simulates human-like typing into an input element.
+    
+    Types text character-by-character with random delays to mimic human behavior
+    and avoid bot detection systems.
+    
+    Args:
+        element: Playwright Locator or ElementHandle to type into.
+        text: Text to type.
+        clear_first: If True, clears the field before typing (using triple-click to select all).
+        pre_delay_range: Tuple of (min_ms, max_ms) for random delay before typing starts.
+        char_delay_range: Tuple of (min_ms, max_ms) for random delay between each character.
+    
+    Example:
+        >>> await simulate_human_typing(page.locator("input#email"), "user@example.com")
+        >>> await simulate_human_typing(combo_element, "Python", clear_first=True)
+    """
+    # Random pre-typing delay to simulate human hesitation
+    pre_delay_ms = random.randint(pre_delay_range[0], pre_delay_range[1])
+    await asyncio.sleep(pre_delay_ms / 1000.0)
+
+    # Clear the field if requested (using fill is more reliable than triple-click)
+    if clear_first:
+        await element.fill("")
+        # Small delay after clearing
+        await asyncio.sleep(random.randint(50, 100) / 1000.0)
+
+    # Calculate random delay for this typing session
+    char_delay_ms = random.randint(char_delay_range[0], char_delay_range[1])
+    
+    # Type text character by character with random delays
+    await element.press_sequentially(str(text), delay=char_delay_ms)
+
+
+async def random_sleep(base_delay_s: float) -> None:
+    """
+    Waits for a random duration between base_delay_s and base_delay_s * 2.
+
+    Args:
+        base_delay_s: The minimum delay in seconds.
+    """
+    delay = base_delay_s + random.uniform(0, base_delay_s)
+    await asyncio.sleep(delay)
+
+
+async def random_wait_ms(base_time_ms: int) -> None:
+    """
+    Waits for a random duration based on a millisecond value.
+
+    Args:
+        base_time_ms: The minimum delay in milliseconds.
+    """
+    await random_sleep(base_time_ms / 1000.0)

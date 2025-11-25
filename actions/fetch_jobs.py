@@ -220,7 +220,7 @@ async def fetch_job_links_user(
         logger.info(f"Navigating to initial search URL: {initial_url}")
 
     executor = get_resilience_executor(page)
-    await executor.navigate(initial_url, wait_until="load")
+    await executor.navigate(initial_url, wait_until="load", referer="https://www.linkedin.com/jobs/")
 
     num_available_jobs = await _get_total_job_count(page, initial_url)
     if num_available_jobs == 0:
@@ -436,12 +436,12 @@ async def _scrape_job_page_details(page: Page, link: str) -> dict:
     return details
 
 
-async def _scrape_company_about_page(page: Page, about_url: str) -> dict:
+async def _scrape_company_about_page(page: Page, about_url: str, referer: str) -> dict:
     """Scrapes details from the company's 'About' page."""
     executor = get_resilience_executor(page)
     details = {}
     logger.info(f"Navigating to company 'About' page: {about_url}")
-    await executor.navigate(about_url, wait_until="load")
+    await executor.navigate(about_url, wait_until="load", referer=referer)
 
     overview_selector = selectors["company_about_overview"]
     overview_locator = page.locator(overview_selector).first
@@ -644,7 +644,7 @@ async def fetch_job_details(page: Page, link: str, noncritical_error_tracker: di
 
     full_link = construct_full_url(link)
 
-    await executor.navigate(full_link, wait_until="load")
+    await executor.navigate(full_link, wait_until="load", referer="https://www.linkedin.com/jobs/search/")
 
     details = await _scrape_job_page_details(page, full_link)
 
@@ -690,9 +690,7 @@ async def fetch_job_details(page: Page, link: str, noncritical_error_tracker: di
                 if not about_url.endswith("/"):
                     about_url = f"{about_url}/"
                 try:
-                    company_about_details = await _scrape_company_about_page(
-                        page, about_url
-                    )
+                    company_about_details = await _scrape_company_about_page(page, about_url, referer=full_link)
                     if noncritical_error_tracker is not None and noncritical_error_tracker.get("company_about_scrape", 0) > 0:
                         noncritical_error_tracker["company_about_scrape"] = 0
                         logger.debug("Recovered: company_about_scrape reset to 0")
@@ -736,3 +734,19 @@ async def fetch_job_details(page: Page, link: str, noncritical_error_tracker: di
     all_details = {**details, **company_about_details}
     logger.debug(f"Finished fetching all details for job {link}")
     return all_details
+
+
+async def fetch_job_page_only_details(page: Page, link: str) -> dict:
+    """
+    Fetches details from the main job listing page only, without navigating
+    to the company's "About" page.
+    """
+    logger.debug(f"Fetching job page details for: {link}")
+    executor = get_resilience_executor(page)
+    full_link = construct_full_url(link)
+    await executor.navigate(
+        full_link, wait_until="load", referer="https://www.linkedin.com/jobs/search/"
+    )
+    details = await _scrape_job_page_details(page, full_link)
+    logger.debug(f"Finished fetching job page details for {link}")
+    return details
